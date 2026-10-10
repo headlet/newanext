@@ -1,95 +1,142 @@
-export default function About() {
+"use client";
+
+export default function Contact() {
   return (
-    <section className="py-20 bg-white text-gray-900">
-      <div className="mx-auto max-w-7xl px-6">
+    <section className="bg-[#0b1329] text-white py-20 px-6">
+      <div className="mx-auto max-w-7xl">
         
         {/* Section Header */}
         <div className="text-center mb-16">
           <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-            About Newanext
+            Get In Touch
           </h2>
-          <p className="mt-2 text-sm sm:text-base text-gray-500 max-w-2xl mx-auto">
-            A passion-driven tech company built on the foundation of innovation and excellence
+          <p className="mt-3 text-sm sm:text-base text-gray-400 max-w-xl mx-auto">
+            Ready to start your project? Let&apos;s discuss how we can help bring your ideas to life.
           </p>
         </div>
 
-        {/* Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        {/* Content Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
           
-          {/* Left Column: Text & Story */}
-          <div className="space-y-6">
-            <span className="inline-block bg-purple-100 text-purple-700 text-xs font-semibold px-3 py-1 rounded-full">
-              Our Story
-            </span>
-            <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 leading-snug">
-              Crafting Digital Excellence Since Day One
-            </h3>
-            <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
-              Newanext was founded by a passionate Newari entrepreneur with a vision to bridge the gap between innovative ideas and cutting-edge technology. Starting from humble beginnings in the heart of the Kathmandu Valley, we&apos;ve grown into a trusted software development company.
-            </p>
-            <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
-              Our journey reflects the rich cultural heritage of Newari craftsmanship—meticulous attention to detail, dedication to quality, and a commitment to creating something extraordinary. We combine traditional values with modern technology to deliver software solutions that truly make a difference.
-            </p>
-            <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
-              Today, Newanext stands as a testament to what&apos;s possible when passion meets technology, serving clients globally while staying rooted in our cultural heritage.
-            </p>
+          {/* Left Info Column */}
+          <div className="space-y-8">
+            <div>
+              <h3 className="text-xl font-bold text-white mb-2">Contact Information</h3>
+              <p className="text-sm text-gray-400 leading-relaxed">
+                We&apos;re here to help! Reach out to us through any of the following channels, and we&apos;ll get back to you as soon as possible.
+              </p>
+            </div>
 
-            {/* Feature Checkmarks */}
-            <div className="flex flex-wrap gap-6 pt-2">
-              <div className="flex items-center gap-2">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white text-xs">✓</span>
-                <span className="text-sm font-semibold text-gray-800">Quality First</span>
+            {/* Info Items */}
+            <div className="space-y-6">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center text-white shrink-0">
+                  📍
+                </div>
+                <div>
+                  <h4 className="font-semibold text-white text-sm">Address</h4>
+                  <p className="text-sm text-gray-400">Kathmandu Valley, Nepal</p>
+                  <p className="text-xs text-gray-500">Near you, wherever you are</p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white text-xs">✓</span>
-                <span className="text-sm font-semibold text-gray-800">Client Focused</span>
+
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center text-white shrink-0">
+                  📞
+                </div>
+                <div>
+                  <h4 className="font-semibold text-white text-sm">Phone</h4>
+                  <p className="text-sm text-gray-400">+977-XXXX-XXXXXX</p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white text-xs">✓</span>
-                <span className="text-sm font-semibold text-gray-800">Innovation</span>
+
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center text-white shrink-0">
+                  ✉️
+                </div>
+                <div>
+                  <h4 className="font-semibold text-white text-sm">Email</h4>
+                  <p className="text-sm text-gray-400">info@newanext.com</p>
+                  <p className="text-sm text-gray-400">hello@newanext.com</p>
+                </div>
               </div>
             </div>
+
+            {/* Social Icons */}
+            <div>
+              <h4 className="font-semibold text-white text-sm mb-4">Follow Us</h4>
+              <div className="flex gap-3">
+                {["f", "𝕏", "in", "📸", "gh"].map((icon, idx) => (
+                  <div 
+                    key={idx} 
+                    className="w-10 h-10 rounded-xl bg-[#131b36] border border-gray-700/60 flex items-center justify-center text-gray-300 hover:bg-purple-600 hover:border-transparent transition-colors cursor-pointer text-sm font-bold"
+                  >
+                    {icon}
+                  </div>
+                ))}
+              </div>
+            </div>
+
           </div>
 
-          {/* Right Column: Colored Statistics Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            
-            {/* Card 1: Purple */}
-            <div className="bg-purple-600 text-white p-6 rounded-2xl shadow-md flex flex-col justify-between h-44">
-              <div className="text-2xl">💻</div>
+          {/* Right Form Column */}
+          <div className="bg-[#131b36] p-8 rounded-2xl border border-gray-800 shadow-xl">
+            <form onSubmit={(e) => e.preventDefault()} className="space-y-5">
+              
               <div>
-                <div className="text-3xl sm:text-4xl font-extrabold tracking-tight">50+</div>
-                <div className="text-sm font-medium text-purple-100 mt-1">Projects Completed</div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase tracking-wider">Full Name</label>
+                <input 
+                  type="text" 
+                  placeholder="Your Name" 
+                  className="w-full bg-[#0b1329] border border-gray-700/80 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                />
               </div>
-            </div>
 
-            {/* Card 2: Blue */}
-            <div className="bg-blue-600 text-white p-6 rounded-2xl shadow-md flex flex-col justify-between h-44">
-              <div className="text-2xl">👥</div>
               <div>
-                <div className="text-3xl sm:text-4xl font-extrabold tracking-tight">30+</div>
-                <div className="text-sm font-medium text-blue-100 mt-1">Satisfied Clients</div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase tracking-wider">Email Address</label>
+                <input 
+                  type="email" 
+                  placeholder="your.email@example.com" 
+                  className="w-full bg-[#0b1329] border border-gray-700/80 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                />
               </div>
-            </div>
 
-            {/* Card 3: Green */}
-            <div className="bg-emerald-600 text-white p-6 rounded-2xl shadow-md flex flex-col justify-between h-44">
-              <div className="text-2xl">🏆</div>
               <div>
-                <div className="text-3xl sm:text-4xl font-extrabold tracking-tight">15+</div>
-                <div className="text-sm font-medium text-emerald-100 mt-1">Awards Won</div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase tracking-wider">Phone Number</label>
+                <input 
+                  type="text" 
+                  placeholder="+977-xxx-xxxxxx" 
+                  className="w-full bg-[#0b1329] border border-gray-700/80 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                />
               </div>
-            </div>
 
-            {/* Card 4: Orange */}
-            <div className="bg-amber-600 text-white p-6 rounded-2xl shadow-md flex flex-col justify-between h-44">
-              <div className="text-2xl">🌐</div>
               <div>
-                <div className="text-3xl sm:text-4xl font-extrabold tracking-tight">10+</div>
-                <div className="text-sm font-medium text-amber-100 mt-1">Countries Served</div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase tracking-wider">Subject</label>
+                <input 
+                  type="text" 
+                  placeholder="Your Name" 
+                  className="w-full bg-[#0b1329] border border-gray-700/80 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                />
               </div>
-            </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase tracking-wider">Message</label>
+                <textarea 
+                  rows={4} 
+                  placeholder="tell us about your project" 
+                  className="w-full bg-[#0b1329] border border-gray-700/80 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none"
+                ></textarea>
+              </div>
+
+              <button 
+                type="submit" 
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3.5 rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 text-sm"
+              >
+                <span>Send Message</span>
+                <span>✈️</span>
+              </button>
+
+            </form>
           </div>
 
         </div>

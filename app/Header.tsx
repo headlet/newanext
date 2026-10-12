@@ -9,7 +9,7 @@ export default function Header() {
         <div className="flex items-center space-x-2">
           {/* Replace this div with an <Image> component if you have a logo file */}
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-cyan-500 font-bold text-white">
-            N
+            <img src="/public/images/logo.png" alt="Logo" className="h-6 w-6" />
           </div>
           <span className="text-xl font-bold tracking-tight text-gray-900">
             Newa<span className="text-purple-600">Next</span>

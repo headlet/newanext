@@ -6,7 +6,7 @@ import "./globals.css";
 
 
 export const metadata: Metadata = {
-  title: "My Website",
+  title: "NewaNext",
   description: "My basic website",
 };
 

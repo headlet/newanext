@@ -29,7 +29,7 @@ export default function Header() {
         {/* CTA Button */}
         <div>
           <button className="rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-2 text-sm font-semibold text-white shadow-md hover:opacity-90 transition-opacity">
-            Get Started
+            login
           </button>
         </div>
 

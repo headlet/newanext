@@ -1,84 +1,130 @@
 import Link from "next/link";
 
 export default function AboutPage() {
+  const values = [
+    {
+      title: "Innovation First",
+      description:
+        "We leverage cutting-edge tech stacks like Next.js, React, and modern UI architectures to craft forward-thinking digital products.",
+      gradient: "from-blue-500 to-cyan-500",
+      accentBg: "bg-blue-500/10 text-blue-600",
+      icon: "🚀",
+    },
+    {
+      title: "Clean Code & Performance",
+      description:
+        "Scalability, sub-second load times, and maintainable component architectures are built directly into our core development process.",
+      gradient: "from-purple-500 to-indigo-600",
+      accentBg: "bg-purple-500/10 text-purple-600",
+      icon: "⚡",
+    },
+    {
+      title: "Human-Centric Design",
+      description:
+        "Every line of code and pixel we deliver focuses on intuitive user experiences that solve real-world operational challenges.",
+      gradient: "from-pink-500 to-rose-600",
+      accentBg: "bg-pink-500/10 text-pink-600",
+      icon: "🎯",
+    },
+  ];
+
   return (
-    <main className="min-h-screen bg-gray-50 py-16 px-4 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-slate-50 py-16 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* Colorful Background Glow Accents */}
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-300/30 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute bottom-10 right-10 w-96 h-96 bg-purple-300/30 rounded-full blur-3xl pointer-events-none"></div>
+
       {/* Hero Section */}
-      <section className="max-w-4xl mx-auto text-center space-y-4">
+      <section className="max-w-4xl mx-auto text-center space-y-4 relative z-10">
+        <span className="bg-purple-100 text-purple-700 text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wider">
+          Who We Are
+        </span>
         <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-snug bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500 bg-clip-text text-transparent">
           Crafting Digital Excellence Since Day One
         </h1>
         <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-          At NewaNext, we are passionate about delivering top-notch software solutions that empower businesses to thrive in the modern digital era.
+          At NewaNext, we are passionate about engineering high-performing, scalable software solutions that empower modern enterprises to grow.
         </p>
       </section>
 
       {/* Mission & Vision Section */}
-      <section className="max-w-5xl mx-auto mt-16 grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <h2 className="text-2xl font-bold text-gray-900 mb-3">Our Mission</h2>
-          <p className="text-gray-600 leading-relaxed">
-            To innovate continuously and provide high-performing, scalable web and software applications that solve real-world challenges for our clients worldwide.
+      <section className="max-w-6xl mx-auto mt-16 grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
+        {/* Our Mission Card */}
+        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-8 sm:p-10 rounded-3xl shadow-xl relative overflow-hidden">
+          <div className="w-12 h-12 mb-6 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-2xl">
+            🎯
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-extrabold mb-4">Our Mission</h2>
+          <p className="text-blue-100 leading-relaxed text-base">
+            To deliver exceptional full-stack web applications and digital tools that streamline complex operations, accelerate digital transformation, and provide incredible user experiences.
           </p>
         </div>
 
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <h2 className="text-2xl font-bold text-gray-900 mb-3">Our Vision</h2>
-          <p className="text-gray-600 leading-relaxed">
-            To become a leading software development enterprise known for cutting-edge technologies, exceptional code quality, and human-centric design.
+        {/* Our Vision Card */}
+        <div className="bg-gradient-to-br from-purple-600 to-pink-600 text-white p-8 sm:p-10 rounded-3xl shadow-xl relative overflow-hidden">
+          <div className="w-12 h-12 mb-6 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-2xl">
+            🌟
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-extrabold mb-4">Our Vision</h2>
+          <p className="text-purple-100 leading-relaxed text-base">
+            To become a benchmark software engineering hub known for cutting-edge technology adoption, aesthetic design systems, and reliable enterprise solution delivery.
           </p>
         </div>
       </section>
 
       {/* Core Values Section */}
-      <section className="max-w-5xl mx-auto mt-16">
-        <h2 className="text-3xl font-bold text-center text-gray-900 mb-10">
-          Core Values
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          <div className="bg-white p-6 rounded-xl border border-gray-100 text-center">
-            <div className="w-12 h-12 mx-auto mb-4 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xl">
-              🚀
-            </div>
-            <h3 className="font-semibold text-lg text-gray-900">Innovation</h3>
-            <p className="text-gray-500 text-sm mt-2">
-              Building next-generation software with modern frameworks.
-            </p>
-          </div>
+      <section className="max-w-6xl mx-auto mt-20 relative z-10">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900">
+            Our Guiding Principles
+          </h2>
+          <p className="text-gray-600 mt-2 text-sm sm:text-base">
+            The core pillars behind our product quality and development culture.
+          </p>
+        </div>
 
-          <div className="bg-white p-6 rounded-xl border border-gray-100 text-center">
-            <div className="w-12 h-12 mx-auto mb-4 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center font-bold text-xl">
-              🎯
-            </div>
-            <h3 className="font-semibold text-lg text-gray-900">Excellence</h3>
-            <p className="text-gray-500 text-sm mt-2">
-              Delivering high-quality code and responsive user interfaces.
-            </p>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {values.map((item, index) => (
+            <div
+              key={index}
+              className="bg-white/90 backdrop-blur-md rounded-3xl border border-gray-100 p-8 shadow-xl hover:shadow-2xl transition-all duration-300 flex flex-col justify-between relative group overflow-hidden"
+            >
+              {/* Top Accent Gradient Bar */}
+              <div
+                className={`absolute top-0 left-0 right-0 h-2 bg-gradient-to-r ${item.gradient}`}
+              ></div>
 
-          <div className="bg-white p-6 rounded-xl border border-gray-100 text-center">
-            <div className="w-12 h-12 mx-auto mb-4 bg-pink-100 text-pink-600 rounded-full flex items-center justify-center font-bold text-xl">
-              🤝
+              <div>
+                <div className="w-12 h-12 mb-6 bg-slate-100 rounded-2xl flex items-center justify-center text-2xl">
+                  {item.icon}
+                </div>
+
+                <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-purple-600 transition-colors">
+                  {item.title}
+                </h3>
+
+                <p className="text-gray-600 text-sm leading-relaxed">
+                  {item.description}
+                </p>
+              </div>
             </div>
-            <h3 className="font-semibold text-lg text-gray-900">Collaboration</h3>
-            <p className="text-gray-500 text-sm mt-2">
-              Working closely with businesses to transform their vision into reality.
-            </p>
-          </div>
+          ))}
         </div>
       </section>
 
       {/* Call to Action */}
-      <section className="max-w-4xl mx-auto mt-20 text-center bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl p-10 shadow-lg">
-        <h2 className="text-3xl font-bold mb-4">Ready to Build Something Great?</h2>
-        <p className="text-blue-100 mb-6 max-w-xl mx-auto">
-          Get in touch with our team today and let's bring your ideas to life.
+      <section className="max-w-5xl mx-auto mt-20 text-center bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500 text-white rounded-3xl p-10 sm:p-12 shadow-2xl relative z-10">
+        <h2 className="text-3xl sm:text-4xl font-extrabold mb-4">
+          Want to Partner with NewaNext?
+        </h2>
+        <p className="text-purple-100 mb-8 max-w-2xl mx-auto text-base">
+          Whether you need a custom SaaS platform, product consultation, or tailored web applications, we are ready to bring your vision to life.
         </p>
         <Link
           href="/contact"
-          className="inline-block bg-white text-blue-600 font-semibold px-6 py-3 rounded-xl shadow hover:bg-gray-100 transition-colors"
+          className="inline-block bg-white text-purple-700 hover:bg-slate-100 font-bold px-8 py-3.5 rounded-xl transition-all shadow-lg text-sm uppercase tracking-wider"
         >
-          Contact Us
+          Get in Touch &rarr;
         </Link>
       </section>
     </main>

@@ -31,7 +31,7 @@ export default function ContactPage() {
       {/* Hero Section */}
       <section className="max-w-4xl mx-auto text-center space-y-4 relative z-10">
         <span className="bg-purple-100 text-purple-700 text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wider">
-          Let's Connect / सम्पर्क गर्नुहोस्
+          Lets Connect / सम्पर्क गर्नुहोस्
         </span>
         <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-snug bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500 bg-clip-text text-transparent">
           Get in Touch with NewaNext

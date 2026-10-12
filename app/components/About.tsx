@@ -21,7 +21,7 @@ export default function About() {
             <span className="inline-block bg-purple-100 text-purple-700 text-xs font-semibold px-3 py-1 rounded-full">
               Our Story
             </span>
-            <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 leading-snug">
+            <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 leading-snug ">
               Crafting Digital Excellence Since Day One
             </h3>
             <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
@@ -56,7 +56,7 @@ export default function About() {
             
             {/* Card 1: Purple */}
             <div className="bg-purple-600 text-white p-6 rounded-2xl shadow-md flex flex-col justify-between h-44">
-              <div className="text-2xl">💻</div>
+              <div className="text-5xl">💻</div>
               <div>
                 <div className="text-3xl sm:text-4xl font-extrabold tracking-tight">50+</div>
                 <div className="text-sm font-medium text-purple-100 mt-1">Projects Completed</div>
@@ -65,7 +65,7 @@ export default function About() {
 
             {/* Card 2: Blue */}
             <div className="bg-blue-600 text-white p-6 rounded-2xl shadow-md flex flex-col justify-between h-44">
-              <div className="text-2xl">👥</div>
+              <div className="text-5xl">👥</div>
               <div>
                 <div className="text-3xl sm:text-4xl font-extrabold tracking-tight">30+</div>
                 <div className="text-sm font-medium text-blue-100 mt-1">Satisfied Clients</div>
@@ -74,7 +74,7 @@ export default function About() {
 
             {/* Card 3: Green */}
             <div className="bg-emerald-600 text-white p-6 rounded-2xl shadow-md flex flex-col justify-between h-44">
-              <div className="text-2xl">🏆</div>
+              <div className="text-5xl">🏆</div>
               <div>
                 <div className="text-3xl sm:text-4xl font-extrabold tracking-tight">15+</div>
                 <div className="text-sm font-medium text-emerald-100 mt-1">Awards Won</div>
@@ -83,7 +83,7 @@ export default function About() {
 
             {/* Card 4: Orange */}
             <div className="bg-amber-600 text-white p-6 rounded-2xl shadow-md flex flex-col justify-between h-44">
-              <div className="text-2xl">🌐</div>
+              <div className="text-5xl">🌐</div>
               <div>
                 <div className="text-3xl sm:text-4xl font-extrabold tracking-tight">10+</div>
                 <div className="text-sm font-medium text-amber-100 mt-1">Countries Served</div>

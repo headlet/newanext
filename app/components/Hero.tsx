@@ -53,8 +53,7 @@ export default function Hero() {
           <div className="w-full max-w-lg bg-[#2a2468]/60 rounded-2xl p-4 shadow-2xl border border-purple-400/30">
             <div className="aspect-video bg-[#1e293b] rounded-xl flex items-center justify-center text-purple-300 text-sm font-medium border border-slate-700">
               <div className="text-center space-y-2 p-6">
-                <div className="text-cyan-400 font-mono text-xs">💻 Software Illustration Mockup</div>
-                <p className="text-gray-400 text-xs">Replace this box with your actual image or SVG graphic if needed.</p>
+                <img src="/images/hero.png" alt="" />
               </div>
             </div>
           </div>

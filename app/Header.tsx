@@ -1,21 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type FormEvent, type MouseEvent } from 'react';
+
+type ToastState = {
+  show: boolean;
+  message: string;
+  icon: string;
+};
 
 export default function AuthPage() {
-  const [currentTab, setCurrentTab] = useState('signin');
+  const [currentTab, setCurrentTab] = useState<'signin' | 'signup'>('signin');
   const [isPasswordShown, setIsPasswordShown] = useState(false);
-  const [toast, setToast] = useState({ show: false, message: '', icon: '✨' });
+  const [toast, setToast] = useState<ToastState>({ show: false, message: '', icon: '✨' });
 
   // Toast notification helper
-  const showToast = (message, icon = '✨') => {
+  const showToast = (message: string, icon: string = '✨') => {
     setToast({ show: true, message, icon });
     setTimeout(() => {
       setToast((prev) => ({ ...prev, show: false }));
     }, 3500);
   };
 
-  const handleFormSubmit = (e) => {
+  const handleFormSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const password = formData.get('password');
@@ -33,12 +39,12 @@ export default function AuthPage() {
     }
   };
 
-  const handleForgotPassword = (e) => {
+  const handleForgotPassword = (e: MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     showToast('Password reset link sent to your email!', '✉️');
   };
 
-  const handleSocialLogin = (provider) => {
+  const handleSocialLogin = (provider: string) => {
     showToast(`Redirecting to ${provider} authentication...`, '🔑');
   };
 

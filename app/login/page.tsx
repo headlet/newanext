@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, ChangeEvent, FormEvent, MouseEvent } from 'react';
 
 export default function AuthPage() {
-  const [currentTab, setCurrentTab] = useState('signin');
+  const [currentTab, setCurrentTab] = useState<'signin' | 'signup'>('signin');
   const [isPasswordShown, setIsPasswordShown] = useState(false);
   
   // Form state
@@ -22,14 +22,14 @@ export default function AuthPage() {
     icon: '✨',
   });
 
-  const showToast = (message, icon = '✨') => {
+  const showToast = (message: string, icon: string = '✨') => {
     setToast({ visible: true, message, icon });
     setTimeout(() => {
       setToast((prev) => ({ ...prev, visible: false }));
     }, 3500);
   };
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -37,7 +37,7 @@ export default function AuthPage() {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (currentTab === 'signup' && formData.password !== formData.confirmPassword) {
@@ -52,12 +52,12 @@ export default function AuthPage() {
     }
   };
 
-  const handleForgotPassword = (e) => {
+  const handleForgotPassword = (e: MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     showToast("Password reset link sent to your email!", "✉️");
   };
 
-  const handleSocialLogin = (provider) => {
+  const handleSocialLogin = (provider: string) => {
     showToast(`Redirecting to ${provider} authentication...`, "🔑");
   };
 

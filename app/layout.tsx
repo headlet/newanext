@@ -1,9 +1,5 @@
-
 import type { Metadata } from "next";
-import Header from "./Header";
-import Footer from "./Footer";
 import "./globals.css";
-
 
 export const metadata: Metadata = {
   title: "NewaNext",
@@ -17,13 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
-        <Header />
-
-        <main>{children}</main>
-
-        <Footer />
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

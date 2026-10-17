@@ -229,12 +229,12 @@ export default function NewCoursePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-[1600px]">
         {/* Breadcrumb */}
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <Link
-            href="/courses"
+            href="/admin/courses"
             className="inline-flex items-center gap-2 text-sm font-medium text-gray-600 transition hover:text-indigo-600"
           >
             <ArrowLeft size={16} />
@@ -243,7 +243,7 @@ export default function NewCoursePage() {
 
           <div className="text-sm text-gray-400">
             <Link
-              href="/courses"
+              href="/admin/courses"
               className="transition hover:text-indigo-600"
             >
               Courses

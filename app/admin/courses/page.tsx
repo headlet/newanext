@@ -278,7 +278,7 @@ export default function CoursesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8">
+    <main className="min-h-screen bg-slate-50">
       <PageHeader
         title="Courses"
         description="Create, review and publish everything students can learn on NewaNext."

@@ -1,5 +1,36 @@
 import Link from "next/link";
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  // Your original metadata
+  title: "About Us",
+  description:
+    "Learn about NewaNext, a technology company from Nepal focused on software development, technology services and IT education.",
+  alternates: {
+    canonical: "/about",
+  },
+
+  // 👇 ADDED: OpenGraph tags for Facebook, LinkedIn, & WhatsApp link previews
+  openGraph: {
+    title: "About Us | NewaNext",
+    description:
+      "Learn about NewaNext, a technology company from Nepal focused on software development, technology services, and IT education.",
+    url: "https://newanext.bond/about",
+    siteName: "NewaNext",
+    locale: "en_US",
+    type: "website",
+  },
+
+  // 👇 ADDED: Twitter/X card preview settings
+  twitter: {
+    card: "summary_large_image",
+    title: "About Us | NewaNext",
+    description:
+      "Learn about NewaNext, a technology company from Nepal focused on software development, technology services, and IT education.",
+  },
+};
+
 export default function AboutPage() {
   const values = [
     {

@@ -15,6 +15,8 @@ import {
   ChevronLeft,
   LogOut,
   X,
+  BookOpen,
+
 } from "lucide-react";
 
 type SidebarProps = {
@@ -32,9 +34,11 @@ const NAVIGATION = [
   {
     title: "CONTENT MANAGEMENT",
     items: [
-      { name: "Courses", href: "/admin/courses", icon: GraduationCap },
+      { name: "Courses", href: "/admin/courses", icon: BookOpen },
       { name: "Students", href: "/admin/students", icon: Users },
+      { name: "Services", href: "/admin/services", icon: BookOpen },
       { name: "Products", href: "/admin/products", icon: Package },
+      { name: "Instructors", href: "/admin/instructors", icon: GraduationCap },
       { name: "Portfolio", href: "/admin/portfolio", icon: Globe },
     ],
   },

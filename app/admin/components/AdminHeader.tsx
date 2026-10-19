@@ -71,7 +71,7 @@ export default function AdminHeader({
             href="/admin"
             className="hidden whitespace-nowrap text-slate-400 transition hover:text-purple-600 sm:inline"
           >
-            Admin console
+            Admin
           </Link>
 
           <span className="hidden text-slate-300 sm:inline">/</span>

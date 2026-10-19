@@ -1,3 +1,4 @@
+
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -6,13 +7,15 @@ import {
   updateProfile,
 } from "firebase/auth";
 
-import { auth } from "./firebase";
+import { getFirebaseAuth } from "./firebase";
 
 export async function registerUser(
   name: string,
   email: string,
   password: string
 ) {
+  const auth = getFirebaseAuth();
+
   const credential = await createUserWithEmailAndPassword(
     auth,
     email,
@@ -31,7 +34,7 @@ export async function loginUser(
   password: string
 ) {
   const credential = await signInWithEmailAndPassword(
-    auth,
+    getFirebaseAuth(),
     email,
     password
   );
@@ -40,9 +43,9 @@ export async function loginUser(
 }
 
 export async function logoutUser() {
-  await signOut(auth);
+  await signOut(getFirebaseAuth());
 }
 
 export async function resetPassword(email: string) {
-  await sendPasswordResetEmail(auth, email);
+  await sendPasswordResetEmail(getFirebaseAuth(), email);
 }

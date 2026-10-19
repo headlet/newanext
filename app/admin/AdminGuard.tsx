@@ -1,27 +1,42 @@
+
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "../lib/firebase";
+import { getFirebaseAuth } from "../lib/firebase";
 
 export default function AdminGuard({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        router.replace("/login");
-        return;
-      }
+    const auth = getFirebaseAuth();
 
-      setLoading(false);
-    });
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (user) => {
+        if (!user) {
+          setAuthenticated(false);
+          setLoading(false);
+          router.replace("/login");
+          return;
+        }
+
+        setAuthenticated(true);
+        setLoading(false);
+      },
+      () => {
+        setAuthenticated(false);
+        setLoading(false);
+        router.replace("/login");
+      }
+    );
 
     return () => unsubscribe();
   }, [router]);
@@ -34,6 +49,10 @@ export default function AdminGuard({
         </p>
       </div>
     );
+  }
+
+  if (!authenticated) {
+    return null;
   }
 
   return <>{children}</>;

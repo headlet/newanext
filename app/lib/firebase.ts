@@ -13,10 +13,10 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-console.log(
-  "Firebase key embedded:",
-  Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY)
-);
+// console.log(
+//   "Firebase key embedded:",
+//   Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY)
+// );
 
 function getFirebaseApp(): FirebaseApp {
   if (typeof window === "undefined") {

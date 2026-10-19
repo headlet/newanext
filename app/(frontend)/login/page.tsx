@@ -2,6 +2,7 @@
 
 import {
   useState,
+  useEffect,
   type ChangeEvent,
   type FormEvent,
   type MouseEvent,
@@ -17,13 +18,17 @@ import {
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
+  onAuthStateChanged,
 } from "firebase/auth";
 
 import { getFirebaseAuth } from "../../lib/firebase";
+import { useRouter } from "next/navigation";
 
 type AuthTab = "signin" | "signup";
 
 export default function AuthPage() {
+  const router = useRouter();
+
   const [currentTab, setCurrentTab] = useState<AuthTab>("signin");
   const [isPasswordShown, setIsPasswordShown] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -41,6 +46,35 @@ export default function AuthPage() {
     message: "",
     icon: "✨",
   });
+
+  // Redirect signed-in users without displaying a loading screen.
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+
+    try {
+      const auth = getFirebaseAuth();
+
+      unsubscribe = onAuthStateChanged(
+        auth,
+        (user) => {
+          if (!cancelled && user) {
+            router.replace("/admin");
+          }
+        },
+        (error) => {
+          console.error("Authentication state error:", error);
+        },
+      );
+    } catch (error) {
+      console.error("Firebase initialization error:", error);
+    }
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [router]);
 
   const showToast = (message: string, icon = "✨") => {
     setToast({ visible: true, message, icon });
@@ -101,6 +135,9 @@ export default function AuthPage() {
       case "auth/invalid-api-key":
         return "Firebase API key is missing or invalid. Check your environment variables.";
 
+      case "auth/missing-email":
+        return "Please enter your email address.";
+
       default:
         console.error("Firebase authentication error:", error);
         return "Something went wrong. Please try again.";
@@ -131,7 +168,7 @@ export default function AuthPage() {
       }
 
       if (formData.password !== formData.confirmPassword) {
-        showToast("Passwords do not match! Please check again.", "⚠️");
+        showToast("Passwords do not match. Please check again.", "⚠️");
         return;
       }
     }
@@ -139,7 +176,6 @@ export default function AuthPage() {
     setIsLoading(true);
 
     try {
-      // Initialize Firebase Auth only in the browser when needed.
       const auth = getFirebaseAuth();
 
       if (currentTab === "signin") {
@@ -163,8 +199,7 @@ export default function AuthPage() {
           "🚀",
         );
 
-        // Redirect after implementing and verifying admin authorization.
-        // Example: window.location.assign("/admin");
+        router.replace("/admin");
       } else {
         const credential = await createUserWithEmailAndPassword(
           auth,
@@ -206,11 +241,12 @@ export default function AuthPage() {
     }
 
     try {
-      const auth = getFirebaseAuth();
+      await sendPasswordResetEmail(getFirebaseAuth(), email);
 
-      await sendPasswordResetEmail(auth, email);
-
-      showToast("If the account exists, a reset email will be sent.", "✉️");
+      showToast(
+        "If the account exists, a password reset email will be sent.",
+        "✉️",
+      );
     } catch (error) {
       showToast(getAuthErrorMessage(error), "⚠️");
     }
@@ -230,12 +266,16 @@ export default function AuthPage() {
       const auth = getFirebaseAuth();
       const googleProvider = new GoogleAuthProvider();
 
-      await signInWithPopup(auth, googleProvider);
+      const credential = await signInWithPopup(auth, googleProvider);
 
-      showToast("Signed in with Google successfully!", "🚀");
+      showToast(
+        `Welcome back, ${
+          credential.user.displayName || credential.user.email || "user"
+        }!`,
+        "🚀",
+      );
 
-      // Redirect only after verifying the user's authorized role.
-      // Example: window.location.assign("/admin");
+      router.replace("/admin");
     } catch (error) {
       showToast(getAuthErrorMessage(error), "⚠️");
     } finally {
@@ -328,10 +368,10 @@ export default function AuthPage() {
                   type="text"
                   name="fullName"
                   autoComplete="name"
-                  required
                   value={formData.fullName}
                   onChange={handleInputChange}
                   placeholder="e.g. Manish Sharma"
+                  required
                   className="w-full rounded-xl border border-gray-200 bg-slate-50 px-4 py-3 text-sm text-gray-800 transition-all focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
@@ -350,10 +390,10 @@ export default function AuthPage() {
                 type="email"
                 name="email"
                 autoComplete="email"
-                required
                 value={formData.email}
                 onChange={handleInputChange}
                 placeholder="manish@example.com"
+                required
                 className="w-full rounded-xl border border-gray-200 bg-slate-50 px-4 py-3 text-sm text-gray-800 transition-all focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
@@ -376,10 +416,10 @@ export default function AuthPage() {
                       ? "current-password"
                       : "new-password"
                   }
-                  required
                   value={formData.password}
                   onChange={handleInputChange}
                   placeholder="••••••••"
+                  required
                   className="w-full rounded-xl border border-gray-200 bg-slate-50 px-4 py-3 pr-14 text-sm text-gray-800 transition-all focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
 
@@ -407,10 +447,10 @@ export default function AuthPage() {
                   type={isPasswordShown ? "text" : "password"}
                   name="confirmPassword"
                   autoComplete="new-password"
-                  required
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
                   placeholder="••••••••"
+                  required
                   className="w-full rounded-xl border border-gray-200 bg-slate-50 px-4 py-3 text-sm text-gray-800 transition-all focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
@@ -510,7 +550,7 @@ export default function AuthPage() {
                 <path
                   fillRule="evenodd"
                   clipRule="evenodd"
-                  d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+                  d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-.466-.908-.62.069-.608 1.003.07 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
                 />
               </svg>
 

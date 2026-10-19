@@ -3,6 +3,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { logoutUser } from "@/app/lib/auth";
+
+import { useState } from "react";
 
 import {
   LayoutDashboard,
@@ -16,7 +19,6 @@ import {
   LogOut,
   X,
   BookOpen,
-
 } from "lucide-react";
 
 type SidebarProps = {
@@ -61,6 +63,26 @@ export default function Sidebar({
   open,
   setOpen,
 }: SidebarProps) {
+
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+ const handleLogout = async () => {
+  if (isLoggingOut) return;
+
+  setIsLoggingOut(true);
+
+  try {
+    await logoutUser();
+
+
+    window.location.replace("/login");
+  } catch (error) {
+    console.error("Logout failed:", error);
+    alert("Failed to log out. Please try again.");
+    setIsLoggingOut(false);
+  }
+};
+
   const pathname = usePathname();
 
   function isActive(href: string) {
@@ -221,16 +243,17 @@ export default function Sidebar({
 
           <button
             type="button"
-            onClick={() => {
-              // Connect your actual authentication logout action here.
-            }}
+            onClick={handleLogout}
+            disabled={isLoggingOut}
             title={collapsed ? "Logout" : undefined}
-            className={`mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 ${
+            className={`mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 ${
               collapsed ? "justify-center" : ""
             }`}
           >
             <LogOut size={19} className="shrink-0" />
-            {!collapsed && <span>Logout</span>}
+            {!collapsed && (
+              <span>{isLoggingOut ? "Logging out..." : "Logout"}</span>
+            )}
           </button>
         </div>
       </aside>

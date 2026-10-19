@@ -13,6 +13,11 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
+console.log(
+  "Firebase key embedded:",
+  Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY)
+);
+
 function getFirebaseApp(): FirebaseApp {
   if (typeof window === "undefined") {
     throw new Error("Firebase client services can only be used in the browser.");

@@ -250,7 +250,7 @@ export default function CreateServicePage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
-                      What's included?
+                      What&apos;s included?
                     </label>
 
                     <div className="mt-2 flex gap-2">

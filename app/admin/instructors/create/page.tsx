@@ -409,8 +409,8 @@ export default function CreateInstructorPage() {
                       >
                         <option value="">Select qualification</option>
                         <option>High School</option>
-                        <option>Bachelor's Degree</option>
-                        <option>Master's Degree</option>
+                        <option>Bachelor&apos;s Degree</option>
+                        <option>Master&apos;s Degree</option>
                         <option>PhD</option>
                         <option>Professional Certification</option>
                         <option>Other</option>
@@ -699,7 +699,7 @@ export default function CreateInstructorPage() {
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <h2 className="font-semibold text-gray-900">Account settings</h2>
               <p className="mt-1 text-sm text-gray-500">
-                Configure the instructor's access and account status.
+                Configure the instructor&apos;s access and account status.
               </p>
 
               <div className="mt-5 space-y-5">
@@ -747,7 +747,7 @@ export default function CreateInstructorPage() {
                         Verify instructor
                       </span>
                       <span className="mt-1 block text-xs leading-5 text-gray-500">
-                        Mark the instructor's profile as verified.
+                        Mark the instructor&apos;s profile as verified.
                       </span>
                     </span>
                   </label>

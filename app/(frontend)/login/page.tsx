@@ -1,11 +1,10 @@
-
 "use client";
 
-import React, {
+import {
   useState,
-  ChangeEvent,
-  FormEvent,
-  MouseEvent,
+  type ChangeEvent,
+  type FormEvent,
+  type MouseEvent,
 } from "react";
 
 import {
@@ -20,7 +19,7 @@ import {
   browserSessionPersistence,
 } from "firebase/auth";
 
-import { auth } from "../../lib/firebase";
+import { getFirebaseAuth } from "../../lib/firebase";
 
 type AuthTab = "signin" | "signup";
 
@@ -51,9 +50,7 @@ export default function AuthPage() {
     }, 3500);
   };
 
-  const handleInputChange = (
-    e: ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
 
     setFormData((prev) => ({
@@ -64,9 +61,7 @@ export default function AuthPage() {
 
   const getAuthErrorMessage = (error: unknown): string => {
     const code =
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error
+      typeof error === "object" && error !== null && "code" in error
         ? String(error.code)
         : "";
 
@@ -103,15 +98,16 @@ export default function AuthPage() {
       case "auth/too-many-requests":
         return "Too many attempts. Please try again later.";
 
+      case "auth/invalid-api-key":
+        return "Firebase API key is missing or invalid. Check your environment variables.";
+
       default:
         console.error("Firebase authentication error:", error);
         return "Something went wrong. Please try again.";
     }
   };
 
-  const handleSubmit = async (
-    e: FormEvent<HTMLFormElement>
-  ) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (isLoading) return;
@@ -130,18 +126,12 @@ export default function AuthPage() {
       }
 
       if (formData.password.length < 6) {
-        showToast(
-          "Password must be at least 6 characters.",
-          "⚠️"
-        );
+        showToast("Password must be at least 6 characters.", "⚠️");
         return;
       }
 
       if (formData.password !== formData.confirmPassword) {
-        showToast(
-          "Passwords do not match! Please check again.",
-          "⚠️"
-        );
+        showToast("Passwords do not match! Please check again.", "⚠️");
         return;
       }
     }
@@ -149,47 +139,44 @@ export default function AuthPage() {
     setIsLoading(true);
 
     try {
+      // Initialize Firebase Auth only in the browser when needed.
+      const auth = getFirebaseAuth();
+
       if (currentTab === "signin") {
         await setPersistence(
           auth,
           formData.rememberMe
             ? browserLocalPersistence
-            : browserSessionPersistence
+            : browserSessionPersistence,
         );
 
         const credential = await signInWithEmailAndPassword(
           auth,
           email,
-          formData.password
+          formData.password,
         );
 
         showToast(
           `Welcome back, ${
-            credential.user.displayName ||
-            credential.user.email ||
-            "user"
+            credential.user.displayName || credential.user.email || "user"
           }!`,
-          "🚀"
+          "🚀",
         );
 
-        // Authentication is complete.
-        // Add your dashboard redirect here when your
-        // authorized admin route is ready.
+        // Redirect after implementing and verifying admin authorization.
+        // Example: window.location.assign("/admin");
       } else {
         const credential = await createUserWithEmailAndPassword(
           auth,
           email,
-          formData.password
+          formData.password,
         );
 
         await updateProfile(credential.user, {
           displayName: formData.fullName.trim(),
         });
 
-        showToast(
-          "Account created successfully! Welcome to NewaNext.",
-          "🎉"
-        );
+        showToast("Account created successfully! Welcome to NewaNext.", "🎉");
 
         setFormData({
           fullName: "",
@@ -208,28 +195,22 @@ export default function AuthPage() {
     }
   };
 
-  const handleForgotPassword = async (
-    e: MouseEvent<HTMLAnchorElement>
-  ) => {
+  const handleForgotPassword = async (e: MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
 
     const email = formData.email.trim();
 
     if (!email) {
-      showToast(
-        "Enter your email address first.",
-        "⚠️"
-      );
+      showToast("Enter your email address first.", "⚠️");
       return;
     }
 
     try {
+      const auth = getFirebaseAuth();
+
       await sendPasswordResetEmail(auth, email);
 
-      showToast(
-        "If the account exists, a reset email will be sent.",
-        "✉️"
-      );
+      showToast("If the account exists, a reset email will be sent.", "✉️");
     } catch (error) {
       showToast(getAuthErrorMessage(error), "⚠️");
     }
@@ -237,10 +218,7 @@ export default function AuthPage() {
 
   const handleSocialLogin = async (provider: string) => {
     if (provider === "GitHub") {
-      showToast(
-        "GitHub sign-in is not configured yet.",
-        "⚠️"
-      );
+      showToast("GitHub sign-in is not configured yet.", "⚠️");
       return;
     }
 
@@ -249,17 +227,15 @@ export default function AuthPage() {
     setIsLoading(true);
 
     try {
+      const auth = getFirebaseAuth();
       const googleProvider = new GoogleAuthProvider();
 
       await signInWithPopup(auth, googleProvider);
 
-      showToast(
-        "Signed in with Google successfully!",
-        "🚀"
-      );
+      showToast("Signed in with Google successfully!", "🚀");
 
-      // Configure an authorized dashboard redirect here
-      // after implementing admin access control.
+      // Redirect only after verifying the user's authorized role.
+      // Example: window.location.assign("/admin");
     } catch (error) {
       showToast(getAuthErrorMessage(error), "⚠️");
     } finally {
@@ -285,9 +261,7 @@ export default function AuthPage() {
       >
         <div className="flex max-w-sm items-center space-x-3 rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3.5 text-white shadow-2xl">
           <span className="text-xl">{toast.icon}</span>
-          <span className="text-xs font-medium">
-            {toast.message}
-          </span>
+          <span className="text-xs font-medium">{toast.message}</span>
         </div>
       </div>
 
@@ -299,9 +273,7 @@ export default function AuthPage() {
           </span>
 
           <h1 className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500 bg-clip-text text-3xl font-extrabold tracking-tight text-transparent sm:text-4xl">
-            {currentTab === "signin"
-              ? "Welcome Back"
-              : "Create an Account"}
+            {currentTab === "signin" ? "Welcome Back" : "Create an Account"}
           </h1>
 
           <p className="text-sm text-gray-600">
@@ -413,9 +385,7 @@ export default function AuthPage() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setIsPasswordShown((prev) => !prev)
-                  }
+                  onClick={() => setIsPasswordShown((prev) => !prev)}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-purple-600 hover:text-purple-800 focus:outline-none"
                 >
                   {isPasswordShown ? "Hide" : "Show"}
@@ -457,9 +427,7 @@ export default function AuthPage() {
                     className="mr-2 h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                   />
 
-                  <span className="font-medium">
-                    Remember me
-                  </span>
+                  <span className="font-medium">Remember me</span>
                 </label>
 
                 <a
@@ -506,11 +474,7 @@ export default function AuthPage() {
               onClick={() => handleSocialLogin("Google")}
               className="flex items-center justify-center space-x-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-semibold text-gray-700 shadow-sm transition-all hover:bg-slate-50 disabled:opacity-60"
             >
-              <svg
-                className="h-4 w-4"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   fill="#4285F4"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -534,8 +498,9 @@ export default function AuthPage() {
 
             <button
               type="button"
+              disabled={isLoading}
               onClick={() => handleSocialLogin("GitHub")}
-              className="flex items-center justify-center space-x-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-semibold text-gray-700 shadow-sm transition-all hover:bg-slate-50"
+              className="flex items-center justify-center space-x-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-semibold text-gray-700 shadow-sm transition-all hover:bg-slate-50 disabled:opacity-60"
             >
               <svg
                 className="h-4 w-4 fill-current text-gray-800"

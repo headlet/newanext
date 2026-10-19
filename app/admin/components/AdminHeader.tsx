@@ -1,18 +1,19 @@
+
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Menu,
   Search,
   Bell,
+  UserRound,
 } from "lucide-react";
 
 type AdminHeaderProps = {
   onMenuClick: () => void;
 };
-
-
 
 export default function AdminHeader({
   onMenuClick,
@@ -29,7 +30,11 @@ export default function AdminHeader({
     portfolio: "Portfolio",
     messages: "Messages",
     users: "Users",
+    students: "Students",
+    instructors: "Instructors",
     settings: "Settings",
+    profile: "My Profile",
+    create: "Create",
   };
 
   const segments = pathname.split("/").filter(Boolean);
@@ -38,7 +43,10 @@ export default function AdminHeader({
     pathname === "/admin"
       ? "Dashboard"
       : pathname.endsWith("/new")
-        ? `New ${breadcrumbMap[segments[segments.length - 2]]?.replace(/s$/, "") ?? "item"}`
+        ? `New ${
+            breadcrumbMap[segments[segments.length - 2]]
+              ?.replace(/s$/, "") ?? "item"
+          }`
         : breadcrumbMap[segments[segments.length - 1]] ??
           segments[segments.length - 1]
             ?.replace(/-/g, " ")
@@ -59,9 +67,12 @@ export default function AdminHeader({
         </button>
 
         <div className="flex min-w-0 items-center gap-2 text-sm">
-          <span className="hidden whitespace-nowrap text-slate-400 sm:inline">
+          <Link
+            href="/admin"
+            className="hidden whitespace-nowrap text-slate-400 transition hover:text-purple-600 sm:inline"
+          >
             Admin console
-          </span>
+          </Link>
 
           <span className="hidden text-slate-300 sm:inline">/</span>
 
@@ -71,8 +82,9 @@ export default function AdminHeader({
         </div>
       </div>
 
-      {/* Right: search, notifications, avatar */}
+      {/* Right: search, notifications, profile */}
       <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+        {/* Search */}
         <label className="hidden w-56 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-400 transition focus-within:border-purple-400 focus-within:bg-white focus-within:ring-2 focus-within:ring-purple-100 md:flex lg:w-64">
           <Search size={16} className="shrink-0" />
 
@@ -90,6 +102,7 @@ export default function AdminHeader({
           </kbd>
         </label>
 
+        {/* Notifications */}
         <button
           type="button"
           aria-label="Notifications"
@@ -100,13 +113,19 @@ export default function AdminHeader({
           <span className="absolute right-2 top-2 size-2 rounded-full border-2 border-white bg-red-500" />
         </button>
 
-        <button
-          type="button"
-          aria-label="Admin account"
-          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-purple-100 text-xs font-bold text-purple-700 ring-1 ring-purple-200"
+        {/* Profile navigation */}
+        <Link
+          href="/admin/profile"
+          aria-label="Open profile settings"
+          title="My Profile"
+          className="group flex size-10 shrink-0 items-center justify-center rounded-full bg-purple-100 text-xs font-bold text-purple-700 ring-1 ring-purple-200 transition hover:bg-purple-600 hover:text-white hover:ring-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
         >
-          AD
-        </button>
+          <UserRound
+            size={19}
+            className="hidden group-hover:block"
+          />
+          <span className="group-hover:hidden">AD</span>
+        </Link>
       </div>
     </header>
   );

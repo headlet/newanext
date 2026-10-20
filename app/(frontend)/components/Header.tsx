@@ -26,7 +26,7 @@ const CONTACTS = [
 ];
 
 const SOCIALS = [
-  { name: 'Facebook', href: '#', icon: 'facebook' },
+  { name: 'Facebook', href: 'https://www.facebook.com/profile.php?id=100094078966920', icon: 'facebook' },
   { name: 'Instagram', href: '#', icon: 'instagram' },
   { name: 'LinkedIn', href: '#', icon: 'linkedin' },
   { name: 'YouTube', href: '#', icon: 'youtube' },

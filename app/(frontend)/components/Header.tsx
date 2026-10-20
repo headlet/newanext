@@ -31,7 +31,7 @@ const SOCIALS = [
   { name: 'LinkedIn', href: '#', icon: 'linkedin' },
   { name: 'YouTube', href: 'https://www.youtube.com/@Newanext', icon: 'youtube' },
   { name: 'TikTok', href: '#', icon: 'tiktok' },
-  { name: 'whatsapp', href: '9847484645', icon: 'whatsapp' },
+  { name: 'whatsapp', href: 'https://wa.me/9716686870', icon: 'whatsapp' },
 ];
 
 const COURSE_CATEGORIES = [

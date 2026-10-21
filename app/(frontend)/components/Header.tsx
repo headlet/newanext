@@ -26,12 +26,12 @@ const CONTACTS = [
 ];
 
 const SOCIALS = [
-  { name: 'Facebook', href: '#', icon: 'facebook' },
-  { name: 'Instagram', href: '#', icon: 'instagram' },
+  { name: 'Facebook', href: 'https://www.facebook.com/profile.php?id=100094078966920', icon: 'facebook' },
+  { name: 'Instagram', href: 'https://www.instagram.com/newa_next', icon: 'instagram' },
   { name: 'LinkedIn', href: '#', icon: 'linkedin' },
-  { name: 'YouTube', href: '#', icon: 'youtube' },
+  { name: 'YouTube', href: 'https://www.youtube.com/@Newanext', icon: 'youtube' },
   { name: 'TikTok', href: '#', icon: 'tiktok' },
-  { name: 'Discord', href: '#', icon: 'discord' },
+  { name: 'whatsapp', href: 'https://wa.me/9716686870', icon: 'whatsapp' },
 ];
 
 const COURSE_CATEGORIES = [

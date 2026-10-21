@@ -164,6 +164,7 @@ function Field({
         {label}
         {required && <span className="ml-1 text-rose-500">*</span>}
       </span>
+
       <div className="relative">
         {Icon && (
           <Icon
@@ -171,6 +172,7 @@ function Field({
             className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
           />
         )}
+
         <input
           type={type}
           value={value}
@@ -207,11 +209,13 @@ function PasswordField({
       <span className="mb-2 block text-sm font-semibold text-slate-700">
         {label}
       </span>
+
       <div className="relative">
         <LockKeyhole
           size={17}
           className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
         />
+
         <input
           type={visible ? "text" : "password"}
           value={value}
@@ -220,6 +224,7 @@ function PasswordField({
           autoComplete="new-password"
           className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-11 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50"
         />
+
         <button
           type="button"
           onClick={onToggle}
@@ -261,7 +266,6 @@ function SaveButton({
 export default function ProfileSettingsPage() {
   const [activeTab, setActiveTab] = useState<TabId>("profile");
 
-  // Toast notification state
   const [toast, setToast] = useState({
     visible: false,
     message: "",
@@ -270,6 +274,7 @@ export default function ProfileSettingsPage() {
 
   const [loadingUser, setLoadingUser] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [currentUserUid, setCurrentUserUid] = useState<string | null>(null);
 
   const [profile, setProfile] = useState({
@@ -322,18 +327,18 @@ export default function ProfileSettingsPage() {
     },
   ]);
 
-  // Toast trigger helper
   function triggerToast(
     message: string,
     type: "success" | "error" = "success",
   ) {
     setToast({ visible: true, message, type });
+
     setTimeout(() => {
       setToast((prev) => ({ ...prev, visible: false }));
     }, 4000);
   }
 
-  // Load Authenticated User data from Firebase Auth and Firestore
+  // Load authenticated user data from Firebase Auth and Firestore.
   useEffect(() => {
     const auth = getFirebaseAuth();
 
@@ -362,15 +367,17 @@ export default function ProfileSettingsPage() {
             bio: userProfile?.bio || "",
           });
 
-          // Correctly map image from Firestore or Auth photoURL
           if (userProfile?.photoURL) {
             setAvatar(userProfile.photoURL);
           } else if (user.photoURL) {
             setAvatar(user.photoURL);
           }
-        } catch (err) {
-          console.error("Error loading user profile:", err);
+        } catch (error) {
+          console.error("Error loading user profile:", error);
         }
+      } else {
+        setCurrentUserUid(null);
+        setAvatar("");
       }
 
       setLoadingUser(false);
@@ -383,15 +390,15 @@ export default function ProfileSettingsPage() {
     setProfile((previous) => ({ ...previous, [key]: value }));
   }
 
-  // Upload profile image to Firebase Storage and save its URL
+  // Upload image to Firebase Storage and save its URL.
   async function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
     const input = event.target;
     const file = input.files?.[0];
 
-    if (!file) return;
-
-    // Allow selecting the same file again later
+    // Reset the input so the same file can be selected again.
     input.value = "";
+
+    if (!file) return;
 
     if (!file.type.startsWith("image/")) {
       triggerToast("Please select a valid image file.", "error");
@@ -403,25 +410,19 @@ export default function ProfileSettingsPage() {
       return;
     }
 
-    if (!currentUserUid) {
-      triggerToast("Please sign in before uploading your picture.", "error");
+    const auth = getFirebaseAuth();
+    const user = auth.currentUser;
+
+    if (!user || !currentUserUid || user.uid !== currentUserUid) {
+      triggerToast("Please sign in again before uploading.", "error");
       return;
     }
 
+    setIsUploadingAvatar(true);
+
     try {
-      const auth = getFirebaseAuth();
-      const user = auth.currentUser;
-
-      if (!user || user.uid !== currentUserUid) {
-        triggerToast(
-          "Your session has expired. Please sign in again.",
-          "error",
-        );
-        return;
-      }
-
+      // 1. Upload the actual image file.
       const storage = getStorage(auth.app);
-
       const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
 
       const imageRef = ref(
@@ -433,24 +434,52 @@ export default function ProfileSettingsPage() {
         contentType: file.type,
       });
 
+      // 2. Get the hosted image URL.
       const photoURL = await getDownloadURL(imageRef);
 
-      // Store the URL, not the Base64 image
-      await saveUserProfile(user.uid, { photoURL });
-
-      // Keep Firebase Auth profile synchronized
-      await updateAuthProfile(user, { photoURL });
-
+      // 3. Update the preview only after Storage returns a valid URL.
       setAvatar(photoURL);
 
+      // 4. Save the URL to Firestore.
+      try {
+        await saveUserProfile(user.uid, { photoURL });
+      } catch (error) {
+        console.error("Failed to save photo URL to Firestore:", error);
+        triggerToast(
+          "Image uploaded, but saving its URL to Firestore failed.",
+          "error",
+        );
+        return;
+      }
+
+      // 5. Synchronize the Firebase Auth profile.
+      try {
+        await updateAuthProfile(user, { photoURL });
+      } catch (error) {
+        console.error("Failed to update Firebase Auth photoURL:", error);
+        // Firestore already contains the URL, so the saved image can still load.
+      }
+
       triggerToast("Profile picture updated successfully!");
-    } catch (error) {
-      console.error("Failed to upload profile picture:", error);
+    } catch (error: unknown) {
+      console.error("Profile image upload failed:", error);
+
+      const firebaseError = error as {
+        code?: string;
+        message?: string;
+      };
+
+      console.error("Firebase error code:", firebaseError.code);
+      console.error("Firebase error message:", firebaseError.message);
 
       triggerToast(
-        "Failed to upload profile picture. Please check Firebase Storage configuration and rules.",
+        `Image upload failed: ${
+          firebaseError.code || firebaseError.message || "Unknown error"
+        }`,
         "error",
       );
+    } finally {
+      setIsUploadingAvatar(false);
     }
   }
 
@@ -469,7 +498,6 @@ export default function ProfileSettingsPage() {
     try {
       const auth = getFirebaseAuth();
       const user = auth.currentUser;
-
       const fullName = `${profile.firstName.trim()} ${profile.lastName.trim()}`;
 
       if (user) {
@@ -541,7 +569,6 @@ export default function ProfileSettingsPage() {
       await updatePassword(user, passwords.next);
 
       triggerToast("Password updated successfully!");
-
       setPasswords({ current: "", next: "", confirm: "" });
     } catch (error: any) {
       console.error(error);
@@ -581,7 +608,6 @@ export default function ProfileSettingsPage() {
 
   function revokeSession(id: number) {
     setSessions((previous) => previous.filter((session) => session.id !== id));
-
     triggerToast("Session revoked successfully.");
   }
 
@@ -655,7 +681,6 @@ export default function ProfileSettingsPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
               <ShieldCheck size={21} />
             </div>
-
             <div>
               <p className="text-sm font-bold text-slate-800">
                 Account settings
@@ -695,10 +720,15 @@ export default function ProfileSettingsPage() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingAvatar}
                   aria-label="Upload profile picture"
-                  className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-xl border-2 border-white bg-indigo-600 text-white shadow-sm transition hover:bg-indigo-700"
+                  className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-xl border-2 border-white bg-indigo-600 text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <Camera size={17} />
+                  {isUploadingAvatar ? (
+                    <LoaderCircle size={17} className="animate-spin" />
+                  ) : (
+                    <Camera size={17} />
+                  )}
                 </button>
 
                 <input
@@ -767,9 +797,7 @@ export default function ProfileSettingsPage() {
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => {
-                      setActiveTab(tab.id);
-                    }}
+                    onClick={() => setActiveTab(tab.id)}
                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
                       selected
                         ? "bg-indigo-50 text-indigo-700"
@@ -790,7 +818,6 @@ export default function ProfileSettingsPage() {
                       <span className="block text-sm font-semibold">
                         {tab.label}
                       </span>
-
                       <span
                         className={`mt-1 block text-xs leading-5 ${
                           selected ? "text-indigo-500" : "text-slate-400"
@@ -825,9 +852,7 @@ export default function ProfileSettingsPage() {
 
               <button
                 type="button"
-                onClick={() => {
-                  setActiveTab("security");
-                }}
+                onClick={() => setActiveTab("security")}
                 className="mt-3 text-xs font-bold text-indigo-600 hover:text-indigo-800"
               >
                 Review security →
@@ -976,37 +1001,7 @@ export default function ProfileSettingsPage() {
                   </form>
                 </section>
 
-                {/* <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-                  <SectionHeading
-                    title="Two-factor authentication"
-                    description="Add another layer of protection to your account."
-                  />
-
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-                      <ShieldCheck size={24} />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-bold text-slate-800">
-                        Two-factor authentication (2FA)
-                      </p>
-                      <p className="mt-1 text-sm leading-6 text-slate-500">
-                        Require an additional verification step when signing in.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={twoFactor ? disableTwoFactor : enableTwoFactor}
-                      className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
-                        twoFactor
-                          ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                          : "bg-indigo-600 text-white hover:bg-indigo-700"
-                      }`}
-                    >
-                      {twoFactor ? "Disable (demo)" : "Set up 2FA"}
-                    </button>
-                  </div>
-                </section> */}
+                {/* Two-factor authentication section intentionally remains disabled. */}
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
                   <SectionHeading

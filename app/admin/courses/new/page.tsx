@@ -20,6 +20,7 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  Check,
 } from "lucide-react";
 import { collection, addDoc, getFirestore } from "firebase/firestore";
 import { getFirebaseApp } from "@/app/lib/firebase";
@@ -31,42 +32,6 @@ type CourseSection = {
   duration: string;
   lessons: Lesson[];
 };
-
-const initialSections: CourseSection[] = [
-  {
-    title: "Web fundamentals",
-    duration: "3h 40m",
-    lessons: [
-      ["How the web works", "12:30"],
-      ["HTML structure and semantics", "18:05"],
-      ["Modern CSS layout with Flexbox and Grid", "24:40"],
-    ],
-  },
-  {
-    title: "JavaScript in depth",
-    duration: "5h 10m",
-    lessons: [
-      ["Functions, scope and closures", "21:15"],
-      ["Async code, promises and fetch", "26:50"],
-    ],
-  },
-  {
-    title: "React from the ground up",
-    duration: "5h 45m",
-    lessons: [
-      ["Components and props", "19:20"],
-      ["State, effects and custom hooks", "28:10"],
-    ],
-  },
-  {
-    title: "Node, Express and deployment",
-    duration: "3h 45m",
-    lessons: [
-      ["Building a REST API", "31:00"],
-      ["Deploying to the cloud", "22:35"],
-    ],
-  },
-];
 
 // Toast Notification Component
 type ToastProps = {
@@ -179,8 +144,16 @@ export default function NewCoursePage() {
   const [level, setLevel] = useState("Beginner to advanced");
   const [language, setLanguage] = useState("English");
   const [imageName, setImageName] = useState("");
-  const [sectionsList, setSectionsList] =
-    useState<CourseSection[]>(initialSections);
+
+  const [sectionsList, setSectionsList] = useState<CourseSection[]>([]);
+
+  // Track which section currently has the "Add Lesson" form open
+  const [activeSectionForLesson, setActiveSectionForLesson] = useState<
+    number | null
+  >(null);
+  const [newLessonTitle, setNewLessonTitle] = useState("");
+  const [newLessonDuration, setNewLessonDuration] = useState("");
+
   const [price, setPrice] = useState("");
   const [discount, setDiscount] = useState("0");
   const [discountEnd, setDiscountEnd] = useState("");
@@ -195,7 +168,7 @@ export default function NewCoursePage() {
   const [certificate, setCertificate] = useState(true);
   const [studentQA, setStudentQA] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [openSections, setOpenSections] = useState<number[]>([0, 1, 2, 3]);
+  const [openSections, setOpenSections] = useState<number[]>([]);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
@@ -211,15 +184,16 @@ export default function NewCoursePage() {
   const isPricingComplete = price !== "" && Number(price) >= 0;
 
   function addSection() {
+    const newSectionIndex = sectionsList.length;
     setSectionsList((old) => [
       ...old,
       {
-        title: `New section ${old.length + 1}`,
+        title: "", // Starts completely blank for user input
         duration: "0m",
         lessons: [],
       },
     ]);
-    setOpenSections((old) => [...old, sectionsList.length]);
+    setOpenSections((old) => [...old, newSectionIndex]);
   }
 
   function removeSection(index: number) {
@@ -227,11 +201,56 @@ export default function NewCoursePage() {
     setOpenSections((old) =>
       old.filter((i) => i !== index).map((i) => (i > index ? i - 1 : i)),
     );
+    if (activeSectionForLesson === index) {
+      setActiveSectionForLesson(null);
+    }
   }
 
   function toggleSection(index: number) {
     setOpenSections((old) =>
       old.includes(index) ? old.filter((i) => i !== index) : [...old, index],
+    );
+  }
+
+  function handleSaveLesson(sectionIndex: number) {
+    if (!newLessonTitle.trim()) {
+      setToast({ message: "Please enter a lesson title.", type: "error" });
+      return;
+    }
+
+    const duration = newLessonDuration.trim() || "10:00";
+
+    setSectionsList((old) =>
+      old.map((sec, i) => {
+        if (i === sectionIndex) {
+          return {
+            ...sec,
+            lessons: [
+              ...sec.lessons,
+              [newLessonTitle.trim(), duration] as Lesson,
+            ],
+          };
+        }
+        return sec;
+      }),
+    );
+
+    setNewLessonTitle("");
+    setNewLessonDuration("");
+    setActiveSectionForLesson(null);
+  }
+
+  function removeLesson(sectionIndex: number, lessonIndex: number) {
+    setSectionsList((old) =>
+      old.map((sec, i) => {
+        if (i === sectionIndex) {
+          return {
+            ...sec,
+            lessons: sec.lessons.filter((_, lIdx) => lIdx !== lessonIndex),
+          };
+        }
+        return sec;
+      }),
     );
   }
 
@@ -251,9 +270,8 @@ export default function NewCoursePage() {
       setSubmitting(true);
       const db = getFirestore(getFirebaseApp());
 
-      // Sanitize sections to prevent Firestore nested array error
       const sanitizedSections = sectionsList.map((section) => ({
-        title: section.title,
+        title: section.title || "Untitled Section",
         duration: section.duration,
         lessons: section.lessons.map((lesson) => ({
           title: lesson[0],
@@ -506,7 +524,7 @@ export default function NewCoursePage() {
 
                   return (
                     <div
-                      key={`${section.title}-${index}`}
+                      key={index}
                       className="overflow-hidden rounded-lg border border-gray-200"
                     >
                       <div className="flex flex-wrap items-center gap-3 bg-gray-50 px-3 py-3 sm:px-4">
@@ -532,7 +550,9 @@ export default function NewCoursePage() {
                                 ),
                               )
                             }
-                            className="w-full bg-transparent text-sm font-semibold text-gray-800 outline-none focus:text-indigo-600"
+                            placeholder="Enter section title (e.g. Introduction to React)"
+                            className="w-full bg-transparent text-sm font-semibold text-gray-800 outline-none placeholder:text-gray-400 focus:text-indigo-600"
+                            autoFocus={section.title === ""}
                           />
 
                           <p className="mt-1 text-xs text-gray-500">
@@ -568,45 +588,102 @@ export default function NewCoursePage() {
                       </div>
 
                       {isOpen && (
-                        <div className="divide-y divide-gray-100">
+                        <div className="divide-y divide-gray-100 bg-white">
                           {section.lessons.map((lesson, lessonIndex) => (
                             <div
-                              key={`${lesson[0]}-${lessonIndex}`}
-                              className="flex items-center gap-3 px-4 py-3 pl-8 sm:pl-12"
+                              key={lessonIndex}
+                              className="flex items-center justify-between gap-3 px-4 py-3 pl-8 sm:pl-12"
                             >
-                              <Play
-                                size={13}
-                                className="shrink-0 text-gray-400"
-                              />
-                              <span className="min-w-0 flex-1 text-sm text-gray-700">
+                              <span className="flex items-center gap-2 text-sm text-gray-700">
+                                <Play size={13} className="text-gray-400" />
                                 {lesson[0]}
                               </span>
-                              <span className="shrink-0 text-xs text-gray-400">
-                                {lesson[1]}
-                              </span>
+                              <div className="flex items-center gap-3">
+                                <span className="text-xs text-gray-400">
+                                  {lesson[1]}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    removeLesson(index, lessonIndex)
+                                  }
+                                  className="text-gray-300 hover:text-red-600"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
                             </div>
                           ))}
 
-                          {section.lessons.length === 0 && (
-                            <p className="px-4 py-5 text-center text-sm text-gray-400">
-                              No lessons in this section yet.
-                            </p>
-                          )}
+                          {section.lessons.length === 0 &&
+                            activeSectionForLesson !== index && (
+                              <p className="px-4 py-5 text-center text-sm text-gray-400">
+                                No lessons in this section yet.
+                              </p>
+                            )}
 
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setToast({
-                                message:
-                                  "Connect this button to your lesson creation form.",
-                                type: "error",
-                              })
-                            }
-                            className="flex w-full items-center gap-2 px-4 py-3 pl-8 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 sm:pl-12"
-                          >
-                            <Plus size={15} />
-                            Add lesson
-                          </button>
+                          {/* Inline Lesson Input Form */}
+                          {activeSectionForLesson === index ? (
+                            <div className="bg-gray-50/80 p-4 pl-8 sm:pl-12 space-y-3 border-t border-gray-100">
+                              <p className="text-xs font-bold uppercase tracking-wider text-indigo-600">
+                                Add New Lesson
+                              </p>
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_130px]">
+                                <input
+                                  type="text"
+                                  placeholder="Lesson title (e.g. Introduction to Hooks)"
+                                  value={newLessonTitle}
+                                  onChange={(e) =>
+                                    setNewLessonTitle(e.target.value)
+                                  }
+                                  className={inputClass}
+                                  autoFocus
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Duration (12:30)"
+                                  value={newLessonDuration}
+                                  onChange={(e) =>
+                                    setNewLessonDuration(e.target.value)
+                                  }
+                                  className={inputClass}
+                                />
+                              </div>
+                              <div className="flex items-center justify-end gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveSectionForLesson(null);
+                                    setNewLessonTitle("");
+                                    setNewLessonDuration("");
+                                  }}
+                                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveLesson(index)}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+                                >
+                                  <Check size={14} /> Save Lesson
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveSectionForLesson(index);
+                                setNewLessonTitle("");
+                                setNewLessonDuration("");
+                              }}
+                              className="flex w-full items-center gap-2 px-4 py-3 pl-8 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 sm:pl-12"
+                            >
+                              <Plus size={15} />
+                              Add lesson
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>

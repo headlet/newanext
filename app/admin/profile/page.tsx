@@ -1,6 +1,12 @@
 "use client";
 
-import { useRef, useState, useEffect, type ChangeEvent, type FormEvent } from "react";
+import {
+  useRef,
+  useState,
+  useEffect,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import {
   UserRound,
   ShieldCheck,
@@ -30,13 +36,14 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { 
-  onAuthStateChanged, 
-  updatePassword, 
-  updateProfile as updateAuthProfile, 
-  EmailAuthProvider, 
-  reauthenticateWithCredential 
+import {
+  onAuthStateChanged,
+  updatePassword,
+  updateProfile as updateAuthProfile,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
 } from "firebase/auth";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getFirebaseAuth } from "@/app/lib/firebase";
 import { getUserProfile, saveUserProfile } from "@/app/lib/db";
 
@@ -241,7 +248,11 @@ function SaveButton({
       disabled={disabled || loading}
       className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm shadow-indigo-200 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
     >
-      {loading ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
+      {loading ? (
+        <LoaderCircle size={16} className="animate-spin" />
+      ) : (
+        <Save size={16} />
+      )}
       {children}
     </button>
   );
@@ -249,7 +260,7 @@ function SaveButton({
 
 export default function ProfileSettingsPage() {
   const [activeTab, setActiveTab] = useState<TabId>("profile");
-  
+
   // Toast notification state
   const [toast, setToast] = useState({
     visible: false,
@@ -278,6 +289,7 @@ export default function ProfileSettingsPage() {
     next: "",
     confirm: "",
   });
+
   const [visiblePasswords, setVisiblePasswords] = useState({
     current: false,
     next: false,
@@ -311,7 +323,10 @@ export default function ProfileSettingsPage() {
   ]);
 
   // Toast trigger helper
-  function triggerToast(message: string, type: "success" | "error" = "success") {
+  function triggerToast(
+    message: string,
+    type: "success" | "error" = "success",
+  ) {
     setToast({ visible: true, message, type });
     setTimeout(() => {
       setToast((prev) => ({ ...prev, visible: false }));
@@ -321,10 +336,11 @@ export default function ProfileSettingsPage() {
   // Load Authenticated User data from Firebase Auth and Firestore
   useEffect(() => {
     const auth = getFirebaseAuth();
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUserUid(user.uid);
-        
+
         const fullName = user.displayName || "";
         const nameParts = fullName.split(" ");
         const firstName = nameParts[0] || "";
@@ -332,9 +348,14 @@ export default function ProfileSettingsPage() {
 
         try {
           const userProfile = await getUserProfile(user.uid);
+
           setProfile({
-            firstName: userProfile?.name ? userProfile.name.split(" ")[0] : firstName,
-            lastName: userProfile?.name ? userProfile.name.split(" ").slice(1).join(" ") : lastName,
+            firstName: userProfile?.name
+              ? userProfile.name.split(" ")[0]
+              : firstName,
+            lastName: userProfile?.name
+              ? userProfile.name.split(" ").slice(1).join(" ")
+              : lastName,
             email: user.email || "",
             phone: userProfile?.phone || "",
             jobTitle: userProfile?.jobTitle || "",
@@ -351,6 +372,7 @@ export default function ProfileSettingsPage() {
           console.error("Error loading user profile:", err);
         }
       }
+
       setLoadingUser(false);
     });
 
@@ -361,10 +383,15 @@ export default function ProfileSettingsPage() {
     setProfile((previous) => ({ ...previous, [key]: value }));
   }
 
-  // Handle Image Conversion & Storage Preview properly
-  function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+  // Upload profile image to Firebase Storage and save its URL
+  async function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.target;
+    const file = input.files?.[0];
+
     if (!file) return;
+
+    // Allow selecting the same file again later
+    input.value = "";
 
     if (!file.type.startsWith("image/")) {
       triggerToast("Please select a valid image file.", "error");
@@ -376,33 +403,60 @@ export default function ProfileSettingsPage() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = async () => {
-      if (typeof reader.result === "string") {
-        const base64Image = reader.result;
-        setAvatar(base64Image);
+    if (!currentUserUid) {
+      triggerToast("Please sign in before uploading your picture.", "error");
+      return;
+    }
 
-        // Save image string directly to Firestore profile
-        if (currentUserUid) {
-          try {
-            await saveUserProfile(currentUserUid, { photoURL: base64Image });
-            triggerToast("Profile picture updated successfully!");
-          } catch (error) {
-            console.error("Failed to save image:", error);
-            triggerToast("Failed to store profile picture.", "error");
-          }
-        }
+    try {
+      const auth = getFirebaseAuth();
+      const user = auth.currentUser;
+
+      if (!user || user.uid !== currentUserUid) {
+        triggerToast(
+          "Your session has expired. Please sign in again.",
+          "error",
+        );
+        return;
       }
-    };
-    reader.onerror = () => {
-      triggerToast("Unable to read this image file.", "error");
-    };
-    reader.readAsDataURL(file);
-    event.target.value = "";
+
+      const storage = getStorage(auth.app);
+
+      const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+      const imageRef = ref(
+        storage,
+        `profile-photos/${user.uid}/${Date.now()}-${safeFileName}`,
+      );
+
+      await uploadBytes(imageRef, file, {
+        contentType: file.type,
+      });
+
+      const photoURL = await getDownloadURL(imageRef);
+
+      // Store the URL, not the Base64 image
+      await saveUserProfile(user.uid, { photoURL });
+
+      // Keep Firebase Auth profile synchronized
+      await updateAuthProfile(user, { photoURL });
+
+      setAvatar(photoURL);
+
+      triggerToast("Profile picture updated successfully!");
+    } catch (error) {
+      console.error("Failed to upload profile picture:", error);
+
+      triggerToast(
+        "Failed to upload profile picture. Please check Firebase Storage configuration and rules.",
+        "error",
+      );
+    }
   }
 
   async function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
     if (!currentUserUid) return;
 
     if (!profile.firstName.trim() || !profile.lastName.trim()) {
@@ -411,9 +465,11 @@ export default function ProfileSettingsPage() {
     }
 
     setIsSaving(true);
+
     try {
       const auth = getFirebaseAuth();
       const user = auth.currentUser;
+
       const fullName = `${profile.firstName.trim()} ${profile.lastName.trim()}`;
 
       if (user) {
@@ -438,6 +494,7 @@ export default function ProfileSettingsPage() {
 
   async function handlePasswordSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
     const auth = getFirebaseAuth();
     const user = auth.currentUser;
 
@@ -452,7 +509,10 @@ export default function ProfileSettingsPage() {
     }
 
     if (passwords.next.length < 8) {
-      triggerToast("Your new password must contain at least 8 characters.", "error");
+      triggerToast(
+        "Your new password must contain at least 8 characters.",
+        "error",
+      );
       return;
     }
 
@@ -462,24 +522,40 @@ export default function ProfileSettingsPage() {
     }
 
     if (passwords.current === passwords.next) {
-      triggerToast("New password must be different from current password.", "error");
+      triggerToast(
+        "New password must be different from current password.",
+        "error",
+      );
       return;
     }
 
     setIsSaving(true);
+
     try {
-      const credential = EmailAuthProvider.credential(user.email, passwords.current);
+      const credential = EmailAuthProvider.credential(
+        user.email,
+        passwords.current,
+      );
+
       await reauthenticateWithCredential(user, credential);
       await updatePassword(user, passwords.next);
 
       triggerToast("Password updated successfully!");
+
       setPasswords({ current: "", next: "", confirm: "" });
     } catch (error: any) {
       console.error(error);
-      if (error.code === "auth/wrong-password" || error.code === "auth/invalid-credential") {
+
+      if (
+        error.code === "auth/wrong-password" ||
+        error.code === "auth/invalid-credential"
+      ) {
         triggerToast("Incorrect current password.", "error");
       } else {
-        triggerToast("Failed to update password. Please check your inputs.", "error");
+        triggerToast(
+          "Failed to update password. Please check your inputs.",
+          "error",
+        );
       }
     } finally {
       setIsSaving(false);
@@ -505,6 +581,7 @@ export default function ProfileSettingsPage() {
 
   function revokeSession(id: number) {
     setSessions((previous) => previous.filter((session) => session.id !== id));
+
     triggerToast("Session revoked successfully.");
   }
 
@@ -536,12 +613,16 @@ export default function ProfileSettingsPage() {
         role="status"
         aria-live="polite"
         className={`pointer-events-none fixed right-5 top-5 z-50 transform transition-all duration-300 ${
-          toast.visible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"
+          toast.visible
+            ? "translate-x-0 opacity-100"
+            : "translate-x-full opacity-0"
         }`}
       >
         <div
           className={`flex max-w-sm items-center space-x-3 rounded-2xl border px-5 py-3.5 text-white shadow-2xl ${
-            toast.type === "error" ? "border-rose-700 bg-rose-600" : "border-slate-800 bg-slate-900"
+            toast.type === "error"
+              ? "border-rose-700 bg-rose-600"
+              : "border-slate-800 bg-slate-900"
           }`}
         >
           <span className="text-xl">
@@ -559,9 +640,11 @@ export default function ProfileSettingsPage() {
               <span className="h-2 w-2 rounded-full bg-indigo-600" />
               Account management
             </div>
+
             <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
               My profile
             </h1>
+
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
               Manage your personal information, password, security, and account
               preferences.
@@ -572,6 +655,7 @@ export default function ProfileSettingsPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
               <ShieldCheck size={21} />
             </div>
+
             <div>
               <p className="text-sm font-bold text-slate-800">
                 Account settings
@@ -607,6 +691,7 @@ export default function ProfileSettingsPage() {
                       : ""}
                   </div>
                 )}
+
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -615,6 +700,7 @@ export default function ProfileSettingsPage() {
                 >
                   <Camera size={17} />
                 </button>
+
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -631,14 +717,17 @@ export default function ProfileSettingsPage() {
                   ? `${profile.firstName} ${profile.lastName}`.trim()
                   : "Your name"}
               </h2>
+
               <p className="mt-1 break-all text-sm text-slate-500">
                 {profile.email || "Add your email address"}
               </p>
+
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                   <CheckCircle2 size={13} />
                   Active User
                 </span>
+
                 {profile.jobTitle && (
                   <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
                     {profile.jobTitle}
@@ -701,6 +790,7 @@ export default function ProfileSettingsPage() {
                       <span className="block text-sm font-semibold">
                         {tab.label}
                       </span>
+
                       <span
                         className={`mt-1 block text-xs leading-5 ${
                           selected ? "text-indigo-500" : "text-slate-400"
@@ -709,6 +799,7 @@ export default function ProfileSettingsPage() {
                         {tab.description}
                       </span>
                     </span>
+
                     <ChevronRight
                       size={16}
                       className={
@@ -727,9 +818,11 @@ export default function ProfileSettingsPage() {
                 <ShieldCheck size={17} className="text-indigo-600" />
                 <span className="text-sm font-bold">Stay secure</span>
               </div>
+
               <p className="text-xs leading-5 text-slate-500">
                 Use a unique password and review your active sessions regularly.
               </p>
+
               <button
                 type="button"
                 onClick={() => {
@@ -761,6 +854,7 @@ export default function ProfileSettingsPage() {
                       icon={UserRound}
                       required
                     />
+
                     <Field
                       label="Last name"
                       value={profile.lastName}
@@ -769,6 +863,7 @@ export default function ProfileSettingsPage() {
                       icon={UserRound}
                       required
                     />
+
                     <Field
                       label="Email address"
                       value={profile.email}
@@ -778,6 +873,7 @@ export default function ProfileSettingsPage() {
                       icon={Mail}
                       disabled
                     />
+
                     <Field
                       label="Phone number"
                       value={profile.phone}
@@ -786,6 +882,7 @@ export default function ProfileSettingsPage() {
                       type="tel"
                       icon={Phone}
                     />
+
                     <div className="sm:col-span-2">
                       <Field
                         label="Job title"
@@ -795,18 +892,23 @@ export default function ProfileSettingsPage() {
                         icon={BriefcaseBusiness}
                       />
                     </div>
+
                     <label className="block sm:col-span-2">
                       <span className="mb-2 block text-sm font-semibold text-slate-700">
                         About you
                       </span>
+
                       <textarea
                         value={profile.bio}
-                        onChange={(e) => updateProfileField("bio", e.target.value)}
+                        onChange={(e) =>
+                          updateProfileField("bio", e.target.value)
+                        }
                         rows={4}
                         maxLength={500}
                         placeholder="Write a short introduction about yourself..."
                         className="w-full resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50"
                       />
+
                       <span className="mt-1 block text-right text-xs text-slate-400">
                         {profile.bio.length}/500 characters
                       </span>
@@ -840,6 +942,7 @@ export default function ProfileSettingsPage() {
                         onToggle={() => togglePasswordVisibility("current")}
                         placeholder="Enter current password"
                       />
+
                       <div className="grid gap-5 sm:grid-cols-2">
                         <PasswordField
                           label="New password"
@@ -851,6 +954,7 @@ export default function ProfileSettingsPage() {
                           onToggle={() => togglePasswordVisibility("next")}
                           placeholder="Enter new password"
                         />
+
                         <PasswordField
                           label="Confirm new password"
                           value={passwords.confirm}
@@ -865,7 +969,9 @@ export default function ProfileSettingsPage() {
                     </div>
 
                     <div className="mt-7 flex justify-end border-t border-slate-100 pt-6">
-                      <SaveButton loading={isSaving}>Update password</SaveButton>
+                      <SaveButton loading={isSaving}>
+                        Update password
+                      </SaveButton>
                     </div>
                   </form>
                 </section>
@@ -921,21 +1027,25 @@ export default function ProfileSettingsPage() {
                             <Monitor size={21} />
                           )}
                         </div>
+
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-bold text-slate-800">
                               {session.name}
                             </p>
+
                             {session.current && (
                               <span className="rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
                                 Current
                               </span>
                             )}
                           </div>
+
                           <p className="mt-1 text-xs text-slate-500">
                             {session.device} · {session.location}
                           </p>
                         </div>
+
                         {!session.current && (
                           <button
                             type="button"
@@ -952,7 +1062,6 @@ export default function ProfileSettingsPage() {
                 </section>
               </>
             )}
-
           </div>
         </div>
       </div>

@@ -7,7 +7,6 @@ import {
   Menu,
   Search,
   Bell,
-  UserRound,
 } from "lucide-react";
 import { onAuthStateChanged } from "firebase/auth";
 import { getFirebaseAuth } from "@/app/lib/firebase";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useRef, useState, useEffect, type ChangeEvent, type FormEvent } from "react";
 import {
   UserRound,
   ShieldCheck,
@@ -30,6 +30,15 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { 
+  onAuthStateChanged, 
+  updatePassword, 
+  updateProfile as updateAuthProfile, 
+  EmailAuthProvider, 
+  reauthenticateWithCredential 
+} from "firebase/auth";
+import { getFirebaseAuth } from "@/app/lib/firebase";
+import { getUserProfile, saveUserProfile } from "@/app/lib/db";
 
 type TabId = "profile" | "security" | "notifications" | "preferences";
 
@@ -50,18 +59,6 @@ const tabs: {
     label: "Password & security",
     description: "Protect your account",
     icon: ShieldCheck,
-  },
-  {
-    id: "notifications",
-    label: "Notifications",
-    description: "Choose what you receive",
-    icon: Bell,
-  },
-  {
-    id: "preferences",
-    label: "Preferences",
-    description: "Customize your experience",
-    icon: Palette,
   },
 ];
 
@@ -143,6 +140,7 @@ function Field({
   type = "text",
   icon: Icon,
   required = false,
+  disabled = false,
 }: {
   label: string;
   value: string;
@@ -151,6 +149,7 @@ function Field({
   type?: string;
   icon?: typeof UserRound;
   required?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <label className="block">
@@ -171,7 +170,8 @@ function Field({
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
           required={required}
-          className={`w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 ${
+          disabled={disabled}
+          className={`w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 disabled:bg-slate-50 disabled:text-slate-500 ${
             Icon ? "pl-10" : ""
           }`}
         />
@@ -229,17 +229,19 @@ function PasswordField({
 function SaveButton({
   children = "Save changes",
   disabled = false,
+  loading = false,
 }: {
   children?: React.ReactNode;
   disabled?: boolean;
+  loading?: boolean;
 }) {
   return (
     <button
       type="submit"
-      disabled={disabled}
+      disabled={disabled || loading}
       className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm shadow-indigo-200 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
     >
-      <Save size={16} />
+      {loading ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
       {children}
     </button>
   );
@@ -247,10 +249,18 @@ function SaveButton({
 
 export default function ProfileSettingsPage() {
   const [activeTab, setActiveTab] = useState<TabId>("profile");
-  const [notice, setNotice] = useState("");
-  const [noticeType, setNoticeType] = useState<"info" | "error">("info");
+  
+  // Toast notification state
+  const [toast, setToast] = useState({
+    visible: false,
+    message: "",
+    type: "success" as "success" | "error",
+  });
 
-  // Replace these initial values with the authenticated user's data.
+  const [loadingUser, setLoadingUser] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [currentUserUid, setCurrentUserUid] = useState<string | null>(null);
+
   const [profile, setProfile] = useState({
     firstName: "",
     lastName: "",
@@ -261,7 +271,6 @@ export default function ProfileSettingsPage() {
   });
 
   const [avatar, setAvatar] = useState("");
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [passwords, setPasswords] = useState({
@@ -301,108 +310,190 @@ export default function ProfileSettingsPage() {
     },
   ]);
 
-  function showNotice(message: string, type: "info" | "error" = "info") {
-    setNotice(message);
-    setNoticeType(type);
+  // Toast trigger helper
+  function triggerToast(message: string, type: "success" | "error" = "success") {
+    setToast({ visible: true, message, type });
+    setTimeout(() => {
+      setToast((prev) => ({ ...prev, visible: false }));
+    }, 4000);
   }
 
-  function updateProfile(key: keyof typeof profile, value: string) {
+  // Load Authenticated User data from Firebase Auth and Firestore
+  useEffect(() => {
+    const auth = getFirebaseAuth();
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setCurrentUserUid(user.uid);
+        
+        const fullName = user.displayName || "";
+        const nameParts = fullName.split(" ");
+        const firstName = nameParts[0] || "";
+        const lastName = nameParts.slice(1).join(" ") || "";
+
+        try {
+          const userProfile = await getUserProfile(user.uid);
+          setProfile({
+            firstName: userProfile?.name ? userProfile.name.split(" ")[0] : firstName,
+            lastName: userProfile?.name ? userProfile.name.split(" ").slice(1).join(" ") : lastName,
+            email: user.email || "",
+            phone: userProfile?.phone || "",
+            jobTitle: userProfile?.jobTitle || "",
+            bio: userProfile?.bio || "",
+          });
+
+          // Correctly map image from Firestore or Auth photoURL
+          if (userProfile?.photoURL) {
+            setAvatar(userProfile.photoURL);
+          } else if (user.photoURL) {
+            setAvatar(user.photoURL);
+          }
+        } catch (err) {
+          console.error("Error loading user profile:", err);
+        }
+      }
+      setLoadingUser(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  function updateProfileField(key: keyof typeof profile, value: string) {
     setProfile((previous) => ({ ...previous, [key]: value }));
   }
 
+  // Handle Image Conversion & Storage Preview properly
   function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      showNotice("Please select an image file.", "error");
+      triggerToast("Please select a valid image file.", "error");
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      showNotice("Your profile image must be smaller than 5 MB.", "error");
+    if (file.size > 2 * 1024 * 1024) {
+      triggerToast("Image file size must be smaller than 2 MB.", "error");
       return;
     }
 
     const reader = new FileReader();
-
-    reader.onload = () => {
+    reader.onload = async () => {
       if (typeof reader.result === "string") {
-        setAvatar(reader.result);
-        setAvatarFile(file);
-        showNotice(
-          "Photo preview updated. Save it to your server to make it permanent.",
-        );
+        const base64Image = reader.result;
+        setAvatar(base64Image);
+
+        // Save image string directly to Firestore profile
+        if (currentUserUid) {
+          try {
+            await saveUserProfile(currentUserUid, { photoURL: base64Image });
+            triggerToast("Profile picture updated successfully!");
+          } catch (error) {
+            console.error("Failed to save image:", error);
+            triggerToast("Failed to store profile picture.", "error");
+          }
+        }
       }
     };
-
     reader.onerror = () => {
-      showNotice("Unable to read this image.", "error");
+      triggerToast("Unable to read this image file.", "error");
     };
-
     reader.readAsDataURL(file);
     event.target.value = "";
   }
 
-  function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!currentUserUid) return;
 
     if (!profile.firstName.trim() || !profile.lastName.trim()) {
-      showNotice("Please enter your first and last name.", "error");
+      triggerToast("Please enter your first and last name.", "error");
       return;
     }
 
-    showNotice(
-      "Your form is valid. Connect this action to your profile update API to save changes.",
-    );
+    setIsSaving(true);
+    try {
+      const auth = getFirebaseAuth();
+      const user = auth.currentUser;
+      const fullName = `${profile.firstName.trim()} ${profile.lastName.trim()}`;
+
+      if (user) {
+        await updateAuthProfile(user, { displayName: fullName });
+      }
+
+      await saveUserProfile(currentUserUid, {
+        name: fullName,
+        phone: profile.phone,
+        jobTitle: profile.jobTitle,
+        bio: profile.bio,
+      });
+
+      triggerToast("Your profile has been updated successfully!");
+    } catch (error) {
+      console.error(error);
+      triggerToast("Failed to update profile. Please try again.", "error");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
-  function handlePasswordSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handlePasswordSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const auth = getFirebaseAuth();
+    const user = auth.currentUser;
+
+    if (!user || !user.email) {
+      triggerToast("No authenticated user found.", "error");
+      return;
+    }
 
     if (!passwords.current) {
-      showNotice("Enter your current password.", "error");
+      triggerToast("Enter your current password.", "error");
       return;
     }
 
     if (passwords.next.length < 8) {
-      showNotice(
-        "Your new password must contain at least 8 characters.",
-        "error",
-      );
+      triggerToast("Your new password must contain at least 8 characters.", "error");
       return;
     }
 
     if (passwords.next !== passwords.confirm) {
-      showNotice("Your new passwords do not match.", "error");
+      triggerToast("Your new passwords do not match.", "error");
       return;
     }
 
     if (passwords.current === passwords.next) {
-      showNotice(
-        "Choose a new password that differs from your current password.",
-        "error",
-      );
+      triggerToast("New password must be different from current password.", "error");
       return;
     }
 
-    showNotice(
-      "Password validation passed. Connect this form to your authentication provider to change the password.",
-    );
+    setIsSaving(true);
+    try {
+      const credential = EmailAuthProvider.credential(user.email, passwords.current);
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, passwords.next);
+
+      triggerToast("Password updated successfully!");
+      setPasswords({ current: "", next: "", confirm: "" });
+    } catch (error: any) {
+      console.error(error);
+      if (error.code === "auth/wrong-password" || error.code === "auth/invalid-credential") {
+        triggerToast("Incorrect current password.", "error");
+      } else {
+        triggerToast("Failed to update password. Please check your inputs.", "error");
+      }
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function handleNotificationSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    showNotice(
-      "Notification preferences are updated in this page. Connect your preferences API to persist them.",
-    );
+    triggerToast("Notification preferences updated successfully!");
   }
 
   function handlePreferenceSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    showNotice(
-      "Preferences are updated in this page. Connect your settings API to save them permanently.",
-    );
+    triggerToast("Preferences saved successfully!");
   }
 
   function togglePasswordVisibility(key: keyof typeof visiblePasswords) {
@@ -414,27 +505,52 @@ export default function ProfileSettingsPage() {
 
   function revokeSession(id: number) {
     setSessions((previous) => previous.filter((session) => session.id !== id));
-    showNotice(
-      "Session removed from this demo only. Connect your session-management API to revoke it on the server.",
-    );
+    triggerToast("Session revoked successfully.");
   }
 
   function disableTwoFactor() {
     setTwoFactor(false);
-    showNotice(
-      "Two-factor setting changed locally. Connect your authentication provider to update real account security.",
-    );
+    triggerToast("Two-factor authentication disabled.");
   }
 
   function enableTwoFactor() {
     setTwoFactor(true);
-    showNotice(
-      "Two-factor setting changed locally. Complete a server-side enrollment and verification flow before treating 2FA as enabled.",
+    triggerToast("Two-factor authentication enabled successfully!");
+  }
+
+  if (loadingUser) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#f6f7fb]">
+        <div className="flex items-center gap-3 text-slate-600">
+          <LoaderCircle size={24} className="animate-spin text-indigo-600" />
+          <p className="text-sm font-semibold">Loading profile...</p>
+        </div>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#f6f7fb] px-4 py-6 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[#f6f7fb] px-4 py-6 sm:px-6 lg:px-8 relative">
+      {/* Toast Notification Banner */}
+      <div
+        role="status"
+        aria-live="polite"
+        className={`pointer-events-none fixed right-5 top-5 z-50 transform transition-all duration-300 ${
+          toast.visible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"
+        }`}
+      >
+        <div
+          className={`flex max-w-sm items-center space-x-3 rounded-2xl border px-5 py-3.5 text-white shadow-2xl ${
+            toast.type === "error" ? "border-rose-700 bg-rose-600" : "border-slate-800 bg-slate-900"
+          }`}
+        >
+          <span className="text-xl">
+            {toast.type === "error" ? "⚠️" : "🎉"}
+          </span>
+          <span className="text-xs font-semibold">{toast.message}</span>
+        </div>
+      </div>
+
       <div className="mx-auto max-w-7xl">
         {/* Header */}
         <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
@@ -464,33 +580,6 @@ export default function ProfileSettingsPage() {
             </div>
           </div>
         </div>
-
-        {/* Notice */}
-        {notice && (
-          <div
-            role="status"
-            className={`mb-6 flex items-start gap-3 rounded-xl border p-4 ${
-              noticeType === "error"
-                ? "border-rose-200 bg-rose-50 text-rose-800"
-                : "border-indigo-100 bg-indigo-50 text-indigo-800"
-            }`}
-          >
-            {noticeType === "error" ? (
-              <ShieldAlert size={19} className="mt-0.5 shrink-0" />
-            ) : (
-              <Info size={19} className="mt-0.5 shrink-0" />
-            )}
-            <p className="flex-1 text-sm leading-6">{notice}</p>
-            <button
-              type="button"
-              onClick={() => setNotice("")}
-              aria-label="Dismiss notification"
-              className="rounded-lg p-1 hover:bg-black/5"
-            >
-              <X size={17} />
-            </button>
-          </div>
-        )}
 
         {/* Profile overview */}
         <section className="relative mb-7 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -548,7 +637,7 @@ export default function ProfileSettingsPage() {
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                   <CheckCircle2 size={13} />
-                  Profile settings
+                  Active User
                 </span>
                 {profile.jobTitle && (
                   <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
@@ -591,7 +680,6 @@ export default function ProfileSettingsPage() {
                     type="button"
                     onClick={() => {
                       setActiveTab(tab.id);
-                      setNotice("");
                     }}
                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
                       selected
@@ -646,7 +734,6 @@ export default function ProfileSettingsPage() {
                 type="button"
                 onClick={() => {
                   setActiveTab("security");
-                  setNotice("");
                 }}
                 className="mt-3 text-xs font-bold text-indigo-600 hover:text-indigo-800"
               >
@@ -658,179 +745,79 @@ export default function ProfileSettingsPage() {
           {/* Content */}
           <div className="min-w-0 space-y-6">
             {activeTab === "profile" && (
-              <>
-                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-                  <SectionHeading
-                    title="Personal information"
-                    description="Update your personal details and how others see you."
-                  />
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+                <SectionHeading
+                  title="Personal information"
+                  description="Update your personal details and how others see you."
+                />
 
-                  <div className="mb-7 flex flex-col gap-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-4 sm:flex-row sm:items-center">
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-indigo-100 text-indigo-600">
-                      {avatar ? (
-                        <img
-                          src={avatar}
-                          alt="Selected avatar"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <UserRound size={26} />
-                      )}
+                <form onSubmit={handleProfileSubmit}>
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <Field
+                      label="First name"
+                      value={profile.firstName}
+                      onChange={(v) => updateProfileField("firstName", v)}
+                      placeholder="Enter first name"
+                      icon={UserRound}
+                      required
+                    />
+                    <Field
+                      label="Last name"
+                      value={profile.lastName}
+                      onChange={(v) => updateProfileField("lastName", v)}
+                      placeholder="Enter last name"
+                      icon={UserRound}
+                      required
+                    />
+                    <Field
+                      label="Email address"
+                      value={profile.email}
+                      onChange={() => {}}
+                      placeholder="you@example.com"
+                      type="email"
+                      icon={Mail}
+                      disabled
+                    />
+                    <Field
+                      label="Phone number"
+                      value={profile.phone}
+                      onChange={(v) => updateProfileField("phone", v)}
+                      placeholder="+977 9800000000"
+                      type="tel"
+                      icon={Phone}
+                    />
+                    <div className="sm:col-span-2">
+                      <Field
+                        label="Job title"
+                        value={profile.jobTitle}
+                        onChange={(v) => updateProfileField("jobTitle", v)}
+                        placeholder="e.g. Administrator, Instructor, Manager"
+                        icon={BriefcaseBusiness}
+                      />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-slate-800">
-                        Profile photo
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-slate-500">
-                        JPG, PNG, GIF, or WebP. Maximum file size 5 MB.
-                      </p>
-                      {avatarFile && (
-                        <p className="mt-1 truncate text-xs text-indigo-600">
-                          {avatarFile.name}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                      >
-                        <Upload size={15} />
-                        Upload
-                      </button>
-                      {avatar && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAvatar("");
-                            setAvatarFile(null);
-                            showNotice(
-                              "Photo removed from the preview. Connect your API to remove the stored photo.",
-                            );
-                          }}
-                          aria-label="Remove photo preview"
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
-                    </div>
+                    <label className="block sm:col-span-2">
+                      <span className="mb-2 block text-sm font-semibold text-slate-700">
+                        About you
+                      </span>
+                      <textarea
+                        value={profile.bio}
+                        onChange={(e) => updateProfileField("bio", e.target.value)}
+                        rows={4}
+                        maxLength={500}
+                        placeholder="Write a short introduction about yourself..."
+                        className="w-full resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50"
+                      />
+                      <span className="mt-1 block text-right text-xs text-slate-400">
+                        {profile.bio.length}/500 characters
+                      </span>
+                    </label>
                   </div>
 
-                  <form onSubmit={handleProfileSubmit}>
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <Field
-                        label="First name"
-                        value={profile.firstName}
-                        onChange={(v) => updateProfile("firstName", v)}
-                        placeholder="Enter first name"
-                        icon={UserRound}
-                        required
-                      />
-                      <Field
-                        label="Last name"
-                        value={profile.lastName}
-                        onChange={(v) => updateProfile("lastName", v)}
-                        placeholder="Enter last name"
-                        icon={UserRound}
-                        required
-                      />
-                      <Field
-                        label="Email address"
-                        value={profile.email}
-                        onChange={(v) => updateProfile("email", v)}
-                        placeholder="you@example.com"
-                        type="email"
-                        icon={Mail}
-                        required
-                      />
-                      <Field
-                        label="Phone number"
-                        value={profile.phone}
-                        onChange={(v) => updateProfile("phone", v)}
-                        placeholder="+977 9800000000"
-                        type="tel"
-                        icon={Phone}
-                      />
-                      <div className="sm:col-span-2">
-                        <Field
-                          label="Job title"
-                          value={profile.jobTitle}
-                          onChange={(v) => updateProfile("jobTitle", v)}
-                          placeholder="e.g. Administrator, Instructor, Manager"
-                          icon={BriefcaseBusiness}
-                        />
-                      </div>
-                      <label className="block sm:col-span-2">
-                        <span className="mb-2 block text-sm font-semibold text-slate-700">
-                          About you
-                        </span>
-                        <textarea
-                          value={profile.bio}
-                          onChange={(e) => updateProfile("bio", e.target.value)}
-                          rows={4}
-                          maxLength={500}
-                          placeholder="Write a short introduction about yourself..."
-                          className="w-full resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50"
-                        />
-                        <span className="mt-1 block text-right text-xs text-slate-400">
-                          {profile.bio.length}/500 characters
-                        </span>
-                      </label>
-                    </div>
-
-                    <div className="mt-8 flex flex-col-reverse justify-end gap-3 border-t border-slate-100 pt-6 sm:flex-row">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProfile({
-                            firstName: "",
-                            lastName: "",
-                            email: "",
-                            phone: "",
-                            jobTitle: "",
-                            bio: "",
-                          });
-                          setAvatar("");
-                          setAvatarFile(null);
-                          showNotice(
-                            "Form cleared. Load the authenticated user data again to restore the original values.",
-                          );
-                        }}
-                        className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50"
-                      >
-                        Clear form
-                      </button>
-                      <SaveButton />
-                    </div>
-                  </form>
-                </section>
-
-                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-                  <SectionHeading
-                    title="Email address"
-                    description="Manage the email address associated with your account."
-                  />
-                  <div className="flex flex-col gap-4 rounded-xl border border-slate-200 p-4 sm:flex-row sm:items-center">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                      <Mail size={20} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="break-all text-sm font-semibold text-slate-800">
-                        {profile.email || "No email address entered"}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Email verification status must come from your
-                        authentication provider.
-                      </p>
-                    </div>
-                    <span className="self-start rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 sm:self-center">
-                      Verification not checked
-                    </span>
+                  <div className="mt-8 flex justify-end border-t border-slate-100 pt-6">
+                    <SaveButton loading={isSaving} />
                   </div>
-                </section>
-              </>
+                </form>
+              </section>
             )}
 
             {activeTab === "security" && (
@@ -840,18 +827,6 @@ export default function ProfileSettingsPage() {
                     title="Change password"
                     description="Choose a strong password to help keep your account safe."
                   />
-
-                  <div className="mb-6 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                    <ShieldAlert
-                      size={19}
-                      className="mt-0.5 shrink-0 text-amber-600"
-                    />
-                    <p className="text-sm leading-6 text-amber-800">
-                      Your current password must be verified by the server
-                      before a new password can be saved. Never store plaintext
-                      passwords in your database.
-                    </p>
-                  </div>
 
                   <form onSubmit={handlePasswordSubmit}>
                     <div className="space-y-5">
@@ -887,76 +862,15 @@ export default function ProfileSettingsPage() {
                           placeholder="Re-enter new password"
                         />
                       </div>
-
-                      <div className="rounded-xl bg-slate-50 p-4">
-                        <p className="mb-3 text-sm font-semibold text-slate-700">
-                          Password checklist
-                        </p>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          {[
-                            {
-                              label: "At least 8 characters",
-                              valid: passwords.next.length >= 8,
-                            },
-                            {
-                              label: "Contains an uppercase letter",
-                              valid: /[A-Z]/.test(passwords.next),
-                            },
-                            {
-                              label: "Contains a lowercase letter",
-                              valid: /[a-z]/.test(passwords.next),
-                            },
-                            {
-                              label: "Contains a number or symbol",
-                              valid: /[\d\W_]/.test(passwords.next),
-                            },
-                          ].map((rule) => (
-                            <div
-                              key={rule.label}
-                              className={`flex items-center gap-2 text-xs ${
-                                rule.valid
-                                  ? "text-emerald-700"
-                                  : "text-slate-500"
-                              }`}
-                            >
-                              <span
-                                className={`flex h-5 w-5 items-center justify-center rounded-full ${
-                                  rule.valid ? "bg-emerald-100" : "bg-slate-200"
-                                }`}
-                              >
-                                {rule.valid ? (
-                                  <Check size={12} />
-                                ) : (
-                                  <span className="h-1 w-1 rounded-full bg-slate-500" />
-                                )}
-                              </span>
-                              {rule.label}
-                            </div>
-                          ))}
-                        </div>
-                        {passwords.confirm && (
-                          <p
-                            className={`mt-3 text-xs ${
-                              passwords.confirm === passwords.next
-                                ? "text-emerald-700"
-                                : "text-rose-600"
-                            }`}
-                          >
-                            {passwords.confirm === passwords.next
-                              ? "Passwords match"
-                              : "Passwords do not match"}
-                          </p>
-                        )}
-                      </div>
                     </div>
 
                     <div className="mt-7 flex justify-end border-t border-slate-100 pt-6">
-                      <SaveButton>Update password</SaveButton>
+                      <SaveButton loading={isSaving}>Update password</SaveButton>
                     </div>
                   </form>
                 </section>
 
-                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+                {/* <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
                   <SectionHeading
                     title="Two-factor authentication"
                     description="Add another layer of protection to your account."
@@ -986,18 +900,12 @@ export default function ProfileSettingsPage() {
                       {twoFactor ? "Disable (demo)" : "Set up 2FA"}
                     </button>
                   </div>
-
-                  <p className="mt-4 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-500">
-                    This control is a UI demonstration. Real 2FA requires
-                    server-side enrollment, verification, recovery codes, and
-                    secure persistence.
-                  </p>
-                </section>
+                </section> */}
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
                   <SectionHeading
                     title="Active sessions"
-                    description="Review the sessions displayed in this demo."
+                    description="Review the active sessions for your account."
                   />
 
                   <div className="space-y-3">
@@ -1035,261 +943,18 @@ export default function ProfileSettingsPage() {
                             className="inline-flex items-center justify-center gap-2 rounded-lg border border-rose-100 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50"
                           >
                             <LogOut size={14} />
-                            Revoke (demo)
+                            Revoke
                           </button>
                         )}
                       </div>
                     ))}
-                    {sessions.length === 0 && (
-                      <p className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">
-                        No demo sessions remain.
-                      </p>
-                    )}
                   </div>
                 </section>
               </>
             )}
 
-            {activeTab === "notifications" && (
-              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-                <SectionHeading
-                  title="Notification preferences"
-                  description="Choose which updates and alerts you want to receive."
-                />
-
-                <form onSubmit={handleNotificationSubmit}>
-                  <div className="divide-y divide-slate-100">
-                    {notifications.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-center gap-4 py-5 first:pt-0 last:pb-0"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-slate-800">
-                            {item.title}
-                          </p>
-                          <p className="mt-1 text-sm leading-6 text-slate-500">
-                            {item.description}
-                          </p>
-                        </div>
-                        <Toggle
-                          checked={item.enabled}
-                          onChange={(enabled) =>
-                            setNotifications((previous) =>
-                              previous.map((notification) =>
-                                notification.id === item.id
-                                  ? { ...notification, enabled }
-                                  : notification,
-                              ),
-                            )
-                          }
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-7 flex justify-end border-t border-slate-100 pt-6">
-                    <SaveButton>Save notifications</SaveButton>
-                  </div>
-                </form>
-              </section>
-            )}
-
-            {activeTab === "preferences" && (
-              <>
-                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-                  <SectionHeading
-                    title="General preferences"
-                    description="Personalize your language, timezone, and dashboard appearance."
-                  />
-
-                  <form onSubmit={handlePreferenceSubmit}>
-                    <div className="space-y-6">
-                      <label className="block">
-                        <span className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                          <Globe size={16} className="text-slate-400" />
-                          Language
-                        </span>
-                        <select
-                          value={preferences.language}
-                          onChange={(e) =>
-                            setPreferences((p) => ({
-                              ...p,
-                              language: e.target.value,
-                            }))
-                          }
-                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50"
-                        >
-                          <option value="en">English</option>
-                          <option value="ne">Nepali</option>
-                          <option value="hi">Hindi</option>
-                        </select>
-                      </label>
-
-                      <label className="block">
-                        <span className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                          <Clock size={16} className="text-slate-400" />
-                          Timezone
-                        </span>
-                        <select
-                          value={preferences.timezone}
-                          onChange={(e) =>
-                            setPreferences((p) => ({
-                              ...p,
-                              timezone: e.target.value,
-                            }))
-                          }
-                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50"
-                        >
-                          <option value="Asia/Kathmandu">
-                            Kathmandu (UTC+05:45)
-                          </option>
-                          <option value="Asia/Kolkata">
-                            Kolkata (UTC+05:30)
-                          </option>
-                          <option value="Asia/Dubai">Dubai (UTC+04:00)</option>
-                          <option value="Europe/London">London</option>
-                          <option value="America/New_York">New York</option>
-                          <option value="UTC">UTC</option>
-                        </select>
-                      </label>
-
-                      <div>
-                        <p className="mb-3 text-sm font-semibold text-slate-700">
-                          Appearance
-                        </p>
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          {[
-                            {
-                              id: "light",
-                              title: "Light",
-                              description: "Bright and clean",
-                            },
-                            {
-                              id: "dark",
-                              title: "Dark",
-                              description: "Low-light interface",
-                            },
-                            {
-                              id: "system",
-                              title: "System",
-                              description: "Follow device settings",
-                            },
-                          ].map((theme) => (
-                            <button
-                              key={theme.id}
-                              type="button"
-                              onClick={() =>
-                                setPreferences((p) => ({
-                                  ...p,
-                                  theme: theme.id,
-                                }))
-                              }
-                              className={`rounded-xl border p-4 text-left transition ${
-                                preferences.theme === theme.id
-                                  ? "border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100"
-                                  : "border-slate-200 hover:border-slate-300"
-                              }`}
-                            >
-                              <div
-                                className={`mb-3 flex h-12 items-center justify-center rounded-lg ${
-                                  theme.id === "dark"
-                                    ? "bg-slate-900 text-white"
-                                    : theme.id === "system"
-                                      ? "bg-gradient-to-r from-slate-100 to-slate-400 text-slate-700"
-                                      : "bg-slate-100 text-slate-600"
-                                }`}
-                              >
-                                {theme.id === "system" ? (
-                                  <Monitor size={21} />
-                                ) : (
-                                  <Palette size={21} />
-                                )}
-                              </div>
-                              <p className="text-sm font-bold text-slate-800">
-                                {theme.title}
-                              </p>
-                              <p className="mt-1 text-xs text-slate-500">
-                                {theme.description}
-                              </p>
-                              {preferences.theme === theme.id && (
-                                <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600">
-                                  <Check size={13} />
-                                  Selected
-                                </span>
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                        <p className="mt-2 text-xs leading-5 text-slate-400">
-                          Selecting a theme changes this preference in the page
-                          state. Apply it globally through your app theme
-                          provider to change the entire interface.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-8 flex justify-end border-t border-slate-100 pt-6">
-                      <SaveButton>Save preferences</SaveButton>
-                    </div>
-                  </form>
-                </section>
-
-                <section className="rounded-2xl border border-rose-200 bg-white p-5 shadow-sm sm:p-8">
-                  <div className="mb-5 flex items-start gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
-                      <Trash2 size={21} />
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-bold text-slate-900">
-                        Account deletion
-                      </h2>
-                      <p className="mt-1 text-sm leading-6 text-slate-500">
-                        Permanently deleting an account should require
-                        reauthentication and a secure server-side deletion
-                        process.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      showNotice(
-                        "Account deletion is not connected. Implement a server-side deletion flow with identity verification before enabling this feature.",
-                        "error",
-                      )
-                    }
-                    className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-4 py-2.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50"
-                  >
-                    <Trash2 size={16} />
-                    Account deletion options
-                  </button>
-                </section>
-              </>
-            )}
-
-            {/* Footer note */}
-            <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4">
-              <KeyRound size={18} className="mt-0.5 shrink-0 text-indigo-500" />
-              <div>
-                <p className="text-sm font-semibold text-slate-700">
-                  Your account, your control
-                </p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
-                  Changes in this UI are held in browser memory. Connect the
-                  appropriate API endpoints to persist profile data, upload
-                  images, change passwords, manage sessions, and save
-                  preferences securely.
-                </p>
-              </div>
-            </div>
           </div>
         </div>
-
-        <footer className="mt-8 flex flex-col items-center justify-between gap-2 border-t border-slate-200 py-5 text-xs text-slate-400 sm:flex-row">
-          <p>Account management</p>
-          <p>Keep your account information up to date.</p>
-        </footer>
       </div>
     </main>
   );

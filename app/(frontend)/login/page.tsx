@@ -22,6 +22,7 @@ import {
 } from "firebase/auth";
 
 import { getFirebaseAuth } from "../../lib/firebase";
+import { getUserProfile, saveUserProfile } from "@/app/lib/db";
 import { useRouter } from "next/navigation";
 
 type AuthTab = "signin" | "signup";
@@ -102,42 +103,30 @@ export default function AuthPage() {
     switch (code) {
       case "auth/email-already-in-use":
         return "This email is already registered.";
-
       case "auth/invalid-email":
         return "Please enter a valid email address.";
-
       case "auth/weak-password":
         return "Password must be at least 6 characters.";
-
       case "auth/invalid-credential":
       case "auth/user-not-found":
       case "auth/wrong-password":
         return "Invalid email or password.";
-
       case "auth/popup-closed-by-user":
         return "Google sign-in was cancelled.";
-
       case "auth/popup-blocked":
         return "Your browser blocked the sign-in popup.";
-
       case "auth/unauthorized-domain":
         return "This domain is not authorized in Firebase.";
-
       case "auth/operation-not-allowed":
         return "This sign-in method is not enabled in Firebase.";
-
       case "auth/network-request-failed":
         return "Network error. Check your internet connection.";
-
       case "auth/too-many-requests":
         return "Too many attempts. Please try again later.";
-
       case "auth/invalid-api-key":
         return "Firebase API key is missing or invalid. Check your environment variables.";
-
       case "auth/missing-email":
         return "Please enter your email address.";
-
       default:
         console.error("Firebase authentication error:", error);
         return "Something went wrong. Please try again.";
@@ -201,14 +190,25 @@ export default function AuthPage() {
 
         router.replace("/admin");
       } else {
+        // 1. Create Firebase Auth user
         const credential = await createUserWithEmailAndPassword(
           auth,
           email,
           formData.password,
         );
 
+        // 2. Update display name in Auth
         await updateProfile(credential.user, {
           displayName: formData.fullName.trim(),
+        });
+
+        // 3. Save user document in Firestore with default role "user"
+        await saveUserProfile(credential.user.uid, {
+          uid: credential.user.uid,
+          name: formData.fullName.trim(),
+          email: email,
+          role: "user", // Default system role
+          createdAt: new Date().toISOString(),
         });
 
         showToast("Account created successfully! Welcome to NewaNext.", "🎉");
@@ -267,11 +267,24 @@ export default function AuthPage() {
       const googleProvider = new GoogleAuthProvider();
 
       const credential = await signInWithPopup(auth, googleProvider);
+      const user = credential.user;
+
+      // Check if user profile already exists in Firestore
+      const existingProfile = await getUserProfile(user.uid);
+
+      if (!existingProfile) {
+        // First time Google sign-in: create user profile in Firestore
+        await saveUserProfile(user.uid, {
+          uid: user.uid,
+          name: user.displayName || "Google User",
+          email: user.email || "",
+          role: "user", // Default system role
+          createdAt: new Date().toISOString(),
+        });
+      }
 
       showToast(
-        `Welcome back, ${
-          credential.user.displayName || credential.user.email || "user"
-        }!`,
+        `Welcome back, ${user.displayName || user.email || "user"}!`,
         "🚀",
       );
 

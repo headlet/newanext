@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -10,6 +9,9 @@ import {
   Bell,
   UserRound,
 } from "lucide-react";
+import { onAuthStateChanged } from "firebase/auth";
+import { getFirebaseAuth } from "@/app/lib/firebase";
+import { getUserProfile } from "@/app/lib/db";
 
 type AdminHeaderProps = {
   onMenuClick: () => void;
@@ -20,6 +22,43 @@ export default function AdminHeader({
 }: AdminHeaderProps) {
   const pathname = usePathname();
   const [search, setSearch] = useState("");
+  
+  // Profile state for header image & initials
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [userInitials, setUserInitials] = useState("AD");
+
+  useEffect(() => {
+    const auth = getFirebaseAuth();
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // 1. Generate initials from display name (e.g., "Ajay Bhayadyo" -> "AB")
+        if (user.displayName) {
+          const parts = user.displayName.trim().split(" ");
+          if (parts.length >= 2) {
+            setUserInitials(`${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase());
+          } else if (parts.length === 1 && parts[0]) {
+            setUserInitials(parts[0].substring(0, 2).toUpperCase());
+          }
+        } else if (user.email) {
+          setUserInitials(user.email.substring(0, 2).toUpperCase());
+        }
+
+        // 2. Load photoURL from Firestore profile or Auth fallback
+        try {
+          const userProfile = await getUserProfile(user.uid);
+          if (userProfile?.photoURL) {
+            setAvatarUrl(userProfile.photoURL);
+          } else if (user.photoURL) {
+            setAvatarUrl(user.photoURL);
+          }
+        } catch (error) {
+          console.error("Failed to load header profile data:", error);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const breadcrumbMap: Record<string, string> = {
     admin: "Dashboard",
@@ -30,6 +69,7 @@ export default function AdminHeader({
     portfolio: "Portfolio",
     messages: "Messages",
     users: "Users",
+    roles: "Roles",
     students: "Students",
     instructors: "Instructors",
     settings: "Settings",
@@ -113,18 +153,22 @@ export default function AdminHeader({
           <span className="absolute right-2 top-2 size-2 rounded-full border-2 border-white bg-red-500" />
         </button>
 
-        {/* Profile navigation */}
+        {/* Profile navigation with dynamic image or initials */}
         <Link
           href="/admin/profile"
           aria-label="Open profile settings"
           title="My Profile"
-          className="group flex size-10 shrink-0 items-center justify-center rounded-full bg-purple-100 text-xs font-bold text-purple-700 ring-1 ring-purple-200 transition hover:bg-purple-600 hover:text-white hover:ring-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+          className="group relative flex size-10 shrink-0 overflow-hidden items-center justify-center rounded-full bg-purple-100 text-xs font-bold text-purple-700 ring-1 ring-purple-200 transition hover:ring-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
         >
-          <UserRound
-            size={19}
-            className="hidden group-hover:block"
-          />
-          <span className="group-hover:hidden">AD</span>
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt="Profile"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span>{userInitials}</span>
+          )}
         </Link>
       </div>
     </header>

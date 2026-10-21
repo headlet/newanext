@@ -53,7 +53,10 @@ const NAVIGATION = [
   },
   {
     title: "SYSTEM",
-    items: [{ name: "Settings", href: "/admin/settings", icon: Settings }],
+    items: [
+      { name: "Settings", href: "/admin/settings", icon: Settings },
+      { name: "Roles", href: "/admin/roles", icon: Settings },
+    ],
   },
 ];
 
@@ -63,25 +66,23 @@ export default function Sidebar({
   open,
   setOpen,
 }: SidebarProps) {
-
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
- const handleLogout = async () => {
-  if (isLoggingOut) return;
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
 
-  setIsLoggingOut(true);
+    setIsLoggingOut(true);
 
-  try {
-    await logoutUser();
+    try {
+      await logoutUser();
 
-
-    window.location.replace("/login");
-  } catch (error) {
-    console.error("Logout failed:", error);
-    alert("Failed to log out. Please try again.");
-    setIsLoggingOut(false);
-  }
-};
+      window.location.replace("/login");
+    } catch (error) {
+      console.error("Logout failed:", error);
+      alert("Failed to log out. Please try again.");
+      setIsLoggingOut(false);
+    }
+  };
 
   const pathname = usePathname();
 

@@ -1,8 +1,8 @@
-
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Eye,
@@ -17,7 +17,12 @@ import {
   Clock3,
   BookOpen,
   X,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
+import { collection, addDoc, getFirestore } from "firebase/firestore";
+import { getFirebaseApp } from "@/app/lib/firebase";
 
 type Lesson = [string, string];
 
@@ -63,19 +68,53 @@ const initialSections: CourseSection[] = [
   },
 ];
 
+// Toast Notification Component
+type ToastProps = {
+  message: string;
+  type: "success" | "error";
+  onClose: () => void;
+};
+
+function Toast({ message, type, onClose }: ToastProps) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3500);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return (
+    <div
+      className={`fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all ${
+        type === "success" ? "bg-emerald-600" : "bg-rose-600"
+      }`}
+    >
+      {type === "success" ? (
+        <CheckCircle2 size={18} />
+      ) : (
+        <AlertCircle size={18} />
+      )}
+      <span>{message}</span>
+      <button onClick={onClose} className="ml-2 text-white/80 hover:text-white">
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
 function Button({
   children,
   variant = "primary",
   onClick,
   type = "button",
+  disabled = false,
 }: {
   children: ReactNode;
   variant?: "primary" | "secondary";
   onClick?: () => void;
   type?: "button" | "submit";
+  disabled?: boolean;
 }) {
   const base =
-    "inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2";
+    "inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50";
 
   const styles =
     variant === "primary"
@@ -86,6 +125,7 @@ function Button({
     <button
       type={type}
       onClick={onClick}
+      disabled={disabled}
       className={`${base} ${styles}`}
     >
       {children}
@@ -116,13 +156,7 @@ function PageHeader({
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="flex min-w-0 flex-col gap-2 text-sm font-medium text-gray-700">
       {label}
@@ -135,24 +169,19 @@ const inputClass =
   "w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-normal text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100";
 
 export default function NewCoursePage() {
-  const [title, setTitle] = useState(
-    "Full-Stack Web with React & Node",
-  );
-  const [subtitle, setSubtitle] = useState(
-    "Build modern web applications from frontend to deployment",
-  );
-  const [description, setDescription] = useState(
-    "Learn to build and deploy full-stack applications using React, Node.js, Express and modern development workflows.",
-  );
+  const router = useRouter();
+
+  const [title, setTitle] = useState("");
+  const [subtitle, setSubtitle] = useState("");
+  const [description, setDescription] = useState("");
 
   const [category, setCategory] = useState("Web Development");
   const [level, setLevel] = useState("Beginner to advanced");
   const [language, setLanguage] = useState("English");
   const [imageName, setImageName] = useState("");
-  const [status, setStatus] = useState("Draft");
   const [sectionsList, setSectionsList] =
     useState<CourseSection[]>(initialSections);
-  const [price, setPrice] = useState("12500");
+  const [price, setPrice] = useState("");
   const [discount, setDiscount] = useState("0");
   const [discountEnd, setDiscountEnd] = useState("");
   const [instructor, setInstructor] = useState("Suman Adhikari");
@@ -165,10 +194,12 @@ export default function NewCoursePage() {
   const [tag, setTag] = useState("");
   const [certificate, setCertificate] = useState(true);
   const [studentQA, setStudentQA] = useState(true);
-  const [saved, setSaved] = useState(false);
-  const [openSections, setOpenSections] = useState<number[]>([
-    0, 1, 2, 3,
-  ]);
+  const [submitting, setSubmitting] = useState(false);
+  const [openSections, setOpenSections] = useState<number[]>([0, 1, 2, 3]);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
 
   const totalLessons = sectionsList.reduce(
     (total, section) => total + section.lessons.length,
@@ -194,42 +225,92 @@ export default function NewCoursePage() {
   function removeSection(index: number) {
     setSectionsList((old) => old.filter((_, i) => i !== index));
     setOpenSections((old) =>
-      old
-        .filter((i) => i !== index)
-        .map((i) => (i > index ? i - 1 : i)),
+      old.filter((i) => i !== index).map((i) => (i > index ? i - 1 : i)),
     );
   }
 
   function toggleSection(index: number) {
     setOpenSections((old) =>
-      old.includes(index)
-        ? old.filter((i) => i !== index)
-        : [...old, index],
+      old.includes(index) ? old.filter((i) => i !== index) : [...old, index],
     );
   }
 
-  function saveDraft() {
-    // Demo only: connect this function to your API to persist the course.
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 2200);
-  }
-
-  function publishCourse() {
+  async function handleSaveToFirestore(
+    targetStatus: "Draft" | "In review" | "Published",
+  ) {
     if (!isBasicComplete || !isDescriptionComplete || !isPricingComplete) {
-      window.alert(
-        "Please complete the title, subtitle, description and valid price before publishing.",
-      );
+      setToast({
+        message:
+          "Please complete the title, subtitle, description and valid price before saving.",
+        type: "error",
+      });
       return;
     }
 
-    setStatus("In review");
-    window.alert(
-      "Demo: course submitted for review. Connect this action to your API.",
-    );
+    try {
+      setSubmitting(true);
+      const db = getFirestore(getFirebaseApp());
+
+      // Sanitize sections to prevent Firestore nested array error
+      const sanitizedSections = sectionsList.map((section) => ({
+        title: section.title,
+        duration: section.duration,
+        lessons: section.lessons.map((lesson) => ({
+          title: lesson[0],
+          duration: lesson[1],
+        })),
+      }));
+
+      await addDoc(collection(db, "courses"), {
+        title,
+        subtitle,
+        description,
+        category,
+        level,
+        language,
+        status: targetStatus,
+        price: Number(price),
+        discount: Number(discount),
+        discountEnd,
+        instructor,
+        tags,
+        certificate,
+        studentQA,
+        sections: sanitizedSections,
+        students: 0,
+        rating: "—",
+        meta: "Created just now",
+        createdAt: new Date().toISOString(),
+      });
+
+      setToast({
+        message: `Course successfully saved as ${targetStatus}!`,
+        type: "success",
+      });
+      setTimeout(() => {
+        router.push("/admin/courses");
+      }, 1500);
+    } catch (error) {
+      console.error("Error saving course:", error);
+      setToast({
+        message: "Failed to save course to database.",
+        type: "error",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 p-6">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
       <div className="mx-auto max-w-[1600px]">
         {/* Breadcrumb */}
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -261,23 +342,40 @@ export default function NewCoursePage() {
             <>
               <Button
                 variant="secondary"
+                disabled={submitting}
                 onClick={() =>
-                  window.alert(
-                    "Course preview will be available after saving.",
-                  )
+                  setToast({
+                    message: "Course preview will be available after saving.",
+                    type: "error",
+                  })
                 }
               >
                 <Eye size={16} />
                 Preview
               </Button>
 
-              <Button variant="secondary" onClick={saveDraft}>
-                <Save size={16} />
-                {saved ? "Draft saved" : "Save draft"}
+              <Button
+                variant="secondary"
+                disabled={submitting}
+                onClick={() => handleSaveToFirestore("Draft")}
+              >
+                {submitting ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Save size={16} />
+                )}
+                Save draft
               </Button>
 
-              <Button onClick={publishCourse}>
-                <Play size={15} />
+              <Button
+                disabled={submitting}
+                onClick={() => handleSaveToFirestore("In review")}
+              >
+                {submitting ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <Play size={15} />
+                )}
                 Submit for review
               </Button>
             </>
@@ -311,7 +409,7 @@ export default function NewCoursePage() {
                     value={title}
                     maxLength={120}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. Full-Stack Web Development"
+                    placeholder="e.g. Full-Stack Web with React & Node"
                   />
                   <span className="-mt-1 text-xs font-normal text-gray-400">
                     {title.length} of 120 characters
@@ -324,7 +422,7 @@ export default function NewCoursePage() {
                     value={subtitle}
                     maxLength={160}
                     onChange={(e) => setSubtitle(e.target.value)}
-                    placeholder="What will students learn?"
+                    placeholder="Build modern web applications from frontend to deployment"
                   />
                 </Field>
 
@@ -334,7 +432,7 @@ export default function NewCoursePage() {
                     rows={5}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe what students will learn..."
+                    placeholder="Learn to build and deploy full-stack applications using React, Node.js, Express and modern development workflows."
                   />
                 </Field>
 
@@ -389,9 +487,7 @@ export default function NewCoursePage() {
                     2
                   </span>
                   <div>
-                    <h2 className="font-semibold text-gray-900">
-                      Curriculum
-                    </h2>
+                    <h2 className="font-semibold text-gray-900">Curriculum</h2>
                     <p className="mt-1 text-sm text-gray-500">
                       {sectionsList.length} sections · {totalLessons} lessons
                     </p>
@@ -500,9 +596,11 @@ export default function NewCoursePage() {
                           <button
                             type="button"
                             onClick={() =>
-                              window.alert(
-                                "Connect this button to your lesson creation form.",
-                              )
+                              setToast({
+                                message:
+                                  "Connect this button to your lesson creation form.",
+                                type: "error",
+                              })
                             }
                             className="flex w-full items-center gap-2 px-4 py-3 pl-8 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 sm:pl-12"
                           >
@@ -518,10 +616,7 @@ export default function NewCoursePage() {
 
               {sectionsList.length === 0 && (
                 <div className="rounded-lg border border-dashed border-gray-300 px-4 py-10 text-center">
-                  <BookOpen
-                    size={28}
-                    className="mx-auto mb-3 text-gray-300"
-                  />
+                  <BookOpen size={28} className="mx-auto mb-3 text-gray-300" />
                   <p className="text-sm font-medium text-gray-700">
                     No sections yet
                   </p>
@@ -554,6 +649,7 @@ export default function NewCoursePage() {
                     min="0"
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
+                    placeholder="12500"
                   />
                 </Field>
 
@@ -565,6 +661,7 @@ export default function NewCoursePage() {
                     max="100"
                     value={discount}
                     onChange={(e) => setDiscount(e.target.value)}
+                    placeholder="0"
                   />
                 </Field>
 
@@ -598,9 +695,7 @@ export default function NewCoursePage() {
           <aside className="min-w-0 space-y-6 xl:sticky xl:top-6">
             {/* Checklist */}
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-              <h2 className="font-semibold text-gray-900">
-                Publish checklist
-              </h2>
+              <h2 className="font-semibold text-gray-900">Publish checklist</h2>
               <p className="mt-1 text-sm text-gray-500">
                 Complete these items before publishing.
               </p>
@@ -616,16 +711,12 @@ export default function NewCoursePage() {
                     complete: isDescriptionComplete,
                   },
                   {
-                    label: "Curriculum has 4 sections",
-                    complete: sectionsList.length >= 4,
+                    label: "Curriculum has sections",
+                    complete: sectionsList.length > 0,
                   },
                   {
                     label: "Pricing set",
                     complete: isPricingComplete,
-                  },
-                  {
-                    label: "Cover image uploaded",
-                    complete: Boolean(imageName),
                   },
                   {
                     label: "Instructor selected",
@@ -665,10 +756,7 @@ export default function NewCoursePage() {
               </p>
 
               <label className="mt-4 flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center transition hover:border-indigo-400 hover:bg-indigo-50/50">
-                <UploadCloud
-                  size={27}
-                  className="mb-3 text-gray-400"
-                />
+                <UploadCloud size={27} className="mb-3 text-gray-400" />
 
                 <strong className="max-w-full break-words text-sm font-medium text-gray-700">
                   {imageName || "Drop an image or browse"}
@@ -688,7 +776,10 @@ export default function NewCoursePage() {
                     if (!file) return;
 
                     if (file.size > 2 * 1024 * 1024) {
-                      window.alert("Please select an image smaller than 2 MB.");
+                      setToast({
+                        message: "Please select an image smaller than 2 MB.",
+                        type: "error",
+                      });
                       e.target.value = "";
                       return;
                     }
@@ -714,18 +805,6 @@ export default function NewCoursePage() {
                     <option>Nirmala Pandey</option>
                     <option>Kiran Basnet</option>
                     <option>Rajan Tamang</option>
-                  </select>
-                </Field>
-
-                <Field label="Visibility">
-                  <select
-                    className={inputClass}
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                  >
-                    <option>Draft</option>
-                    <option>In review</option>
-                    <option>Published</option>
                   </select>
                 </Field>
 

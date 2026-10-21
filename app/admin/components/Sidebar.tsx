@@ -34,6 +34,14 @@ const NAVIGATION = [
     items: [{ name: "Dashboard", href: "/admin", icon: LayoutDashboard }],
   },
   {
+    title: "USER MANAGEMENT",
+    items: [
+      { name: "Users", href: "/admin/users", icon: Users },
+      { name: "Roles", href: "/admin/roles", icon: BookOpen },
+
+    ],
+  },
+  {
     title: "CONTENT MANAGEMENT",
     items: [
       { name: "Courses", href: "/admin/courses", icon: BookOpen },
@@ -55,7 +63,6 @@ const NAVIGATION = [
     title: "SYSTEM",
     items: [
       { name: "Settings", href: "/admin/settings", icon: Settings },
-      { name: "Roles", href: "/admin/roles", icon: Settings },
     ],
   },
 ];

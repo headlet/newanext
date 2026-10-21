@@ -132,3 +132,22 @@ export async function getUserProfile(
     ...docSnap.data(),
   } as UserProfile;
 }
+
+export async function getAllUsers(): Promise<UserProfile[]> {
+  const db = getFirebaseDb();
+  const querySnapshot = await getDocs(collection(db, "users"));
+
+  return querySnapshot.docs.map((item) => {
+    const data = item.data();
+    return {
+      uid: item.id,
+      name: data.name || data.displayName || "Unnamed User",
+      email: data.email || "No email",
+      role: data.role || "Student",
+      createdAt: data.createdAt || "",
+      updatedAt: data.updatedAt,
+      photoURL: data.photoURL,
+      ...data,
+    } as UserProfile;
+  });
+}

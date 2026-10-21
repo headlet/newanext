@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Download,
@@ -8,14 +8,28 @@ import {
   Search,
   SlidersHorizontal,
   Star,
-  MoreHorizontal,
   BookOpen,
   X,
+  Loader2,
+  Trash2,
+  Edit3,
+  Eye,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
+import {
+  collection,
+  getDocs,
+  deleteDoc,
+  doc,
+  getFirestore,
+} from "firebase/firestore";
+import { getFirebaseApp } from "@/app/lib/firebase";
 
 type CourseStatus = "Published" | "In review" | "Draft";
 
 type Course = {
+  id: string;
   title: string;
   initials: string;
   meta: string;
@@ -26,217 +40,162 @@ type Course = {
   status: CourseStatus;
 };
 
-const courses: Course[] = [
-  {
-    title: "Complete Web Development Bootcamp",
-    initials: "WD",
-    meta: "Updated 2 days ago",
-    category: "Web Development",
-    price: "NPR 12,000",
-    students: 1204,
-    rating: "4.9",
-    status: "Published",
-  },
-  {
-    title: "Python & Data Science Masterclass",
-    initials: "DS",
-    meta: "Updated 4 days ago",
-    category: "Data & AI",
-    price: "NPR 9,500",
-    students: 986,
-    rating: "4.8",
-    status: "Published",
-  },
-  {
-    title: "React and Next.js from Zero to Pro",
-    initials: "RN",
-    meta: "Updated yesterday",
-    category: "Web Development",
-    price: "NPR 8,000",
-    students: 842,
-    rating: "4.9",
-    status: "Published",
-  },
-  {
-    title: "Cloud Computing with AWS",
-    initials: "CC",
-    meta: "Submitted 1 day ago",
-    category: "Cloud & DevOps",
-    price: "NPR 10,000",
-    students: 0,
-    rating: "—",
-    status: "In review",
-  },
-  {
-    title: "UI/UX Design Fundamentals",
-    initials: "UX",
-    meta: "Updated 3 days ago",
-    category: "Design",
-    price: "NPR 6,500",
-    students: 611,
-    rating: "4.7",
-    status: "Published",
-  },
-  {
-    title: "Laravel API Development",
-    initials: "LA",
-    meta: "Last edited 5 hours ago",
-    category: "Web Development",
-    price: "NPR 5,000",
-    students: 0,
-    rating: "—",
-    status: "Draft",
-  },
-  {
-    title: "Mobile App Development with Flutter",
-    initials: "FL",
-    meta: "Updated 1 week ago",
-    category: "Mobile",
-    price: "NPR 7,500",
-    students: 520,
-    rating: "4.6",
-    status: "Published",
-  },
-  {
-    title: "Cybersecurity Essentials",
-    initials: "CS",
-    meta: "Submitted 2 days ago",
-    category: "Security",
-    price: "NPR 8,500",
-    students: 0,
-    rating: "—",
-    status: "In review",
-  },
-  {
-    title: "Introduction to Machine Learning",
-    initials: "ML",
-    meta: "Last edited 2 days ago",
-    category: "Data & AI",
-    price: "NPR 11,000",
-    students: 0,
-    rating: "—",
-    status: "Draft",
-  },
-];
-
 const statusStyles: Record<CourseStatus, string> = {
   Published: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
   "In review": "bg-violet-50 text-violet-700 ring-violet-600/20",
   Draft: "bg-slate-100 text-slate-600 ring-slate-500/20",
 };
 
-function PageHeader({
-  title,
-  description,
-  actions,
+// Toast Notification Component
+function Toast({
+  message,
+  type,
+  onClose,
 }: {
-  title: string;
-  description: string;
-  actions: React.ReactNode;
+  message: string;
+  type: "success" | "error";
+  onClose: () => void;
 }) {
-  return (
-    <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-          {title}
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-          {description}
-        </p>
-      </div>
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3500);
+    return () => clearTimeout(timer);
+  }, [onClose]);
 
-      <div className="flex flex-wrap items-center gap-3">{actions}</div>
+  return (
+    <div
+      className={`fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all ${
+        type === "success" ? "bg-emerald-600" : "bg-rose-600"
+      }`}
+    >
+      {type === "success" ? (
+        <CheckCircle2 size={18} />
+      ) : (
+        <AlertCircle size={18} />
+      )}
+      <span>{message}</span>
+      <button onClick={onClose} className="ml-2 text-white/80 hover:text-white">
+        <X size={14} />
+      </button>
     </div>
   );
 }
 
-function Button({
-  children,
-  href,
-  onClick,
-  variant = "primary",
-}: {
-  children: React.ReactNode;
-  href?: string;
-  onClick?: () => void;
-  variant?: "primary" | "secondary";
-}) {
-  const classes =
-    "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 " +
-    (variant === "primary"
-      ? "bg-violet-600 text-white shadow-sm hover:bg-violet-700"
-      : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50");
-
-  if (href) {
-    return (
-      <Link href={href} className={classes}>
-        {children}
-      </Link>
-    );
-  }
-
-  return (
-    <button type="button" onClick={onClick} className={classes}>
-      {children}
-    </button>
-  );
-}
-
-function Status({ status }: { status: CourseStatus }) {
-  return (
-    <span
-      className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusStyles[status]}`}
-    >
-      {status}
-    </span>
-  );
-}
-
 export default function CoursesPage() {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [tab, setTab] = useState("All");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All categories");
   const [showFilters, setShowFilters] = useState(false);
-  const [menuCourse, setMenuCourse] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
 
   const pageSize = 6;
 
-  const tabs = [
-    { name: "All", count: 64 },
-    { name: "Published", count: 52 },
-    { name: "In review", count: 3 },
-    { name: "Draft", count: 9 },
-  ];
+  // Fetch courses from Firestore on mount
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
+  async function fetchCourses() {
+    try {
+      setLoading(true);
+      const db = getFirestore(getFirebaseApp());
+      const querySnapshot = await getDocs(collection(db, "courses"));
+
+      const fetchedCourses: Course[] = [];
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const title = data.title || "Untitled Course";
+        const initials = title
+          .split(" ")
+          .map((n: string) => n[0])
+          .join("")
+          .substring(0, 2)
+          .toUpperCase();
+
+        fetchedCourses.push({
+          id: docSnap.id,
+          title: title,
+          initials: initials || "C",
+          meta: data.meta || "Updated recently",
+          category: data.category || "General",
+          price: data.price
+            ? `NPR ${Number(data.price).toLocaleString("en-NP")}`
+            : "NPR 0",
+          students: data.students || 0,
+          rating: data.rating || "—",
+          status: data.status || "Draft",
+        });
+      });
+
+      setCourses(fetchedCourses);
+    } catch (error) {
+      console.error("Error fetching courses:", error);
+      setToast({
+        message: "Failed to load courses from database.",
+        type: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete(course: Course) {
+    if (!window.confirm(`Are you sure you want to delete "${course.title}"?`))
+      return;
+
+    try {
+      const db = getFirestore(getFirebaseApp());
+      await deleteDoc(doc(db, "courses", course.id));
+      setCourses((current) => current.filter((c) => c.id !== course.id));
+      setToast({ message: "Course deleted successfully.", type: "success" });
+    } catch (error) {
+      console.error("Failed to delete course:", error);
+      setToast({ message: "Failed to delete course.", type: "error" });
+    }
+  }
+
+  const tabs = useMemo(
+    () => [
+      { name: "All", count: courses.length },
+      {
+        name: "Published",
+        count: courses.filter((c) => c.status === "Published").length,
+      },
+      {
+        name: "In review",
+        count: courses.filter((c) => c.status === "In review").length,
+      },
+      {
+        name: "Draft",
+        count: courses.filter((c) => c.status === "Draft").length,
+      },
+    ],
+    [courses],
+  );
 
   const filtered = useMemo(
     () =>
       courses.filter((course) => {
         const matchesTab = tab === "All" || course.status === tab;
-
         const searchText =
           `${course.title} ${course.category} ${course.meta}`.toLowerCase();
-
         const matchesQuery = searchText.includes(query.toLowerCase().trim());
-
         const matchesCategory =
           category === "All categories" || course.category === category;
-
         return matchesTab && matchesQuery && matchesCategory;
       }),
-    [tab, query, category],
+    [courses, tab, query, category],
   );
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const startIndex = (currentPage - 1) * pageSize;
-
   const visibleCourses = filtered.slice(startIndex, startIndex + pageSize);
-
-  function changeTab(value: string) {
-    setTab(value);
-    setPage(1);
-  }
 
   function exportCSV() {
     const headers = [
@@ -247,7 +206,6 @@ export default function CoursesPage() {
       "Rating",
       "Status",
     ];
-
     const rows = filtered.map((course) => [
       course.title,
       course.category,
@@ -258,7 +216,6 @@ export default function CoursesPage() {
     ]);
 
     const escapeCSV = (value: string) => `"${value.replace(/"/g, '""')}"`;
-
     const csv = [headers, ...rows]
       .map((row) => row.map(escapeCSV).join(","))
       .join("\r\n");
@@ -266,43 +223,68 @@ export default function CoursesPage() {
     const blob = new Blob(["\uFEFF" + csv], {
       type: "text/csv;charset=utf-8;",
     });
-
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-
     link.href = url;
     link.download = "courses.csv";
     link.click();
-
     URL.revokeObjectURL(url);
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-96 w-full items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin text-violet-600" size={36} />
+      </div>
+    );
   }
 
   return (
     <main className="min-h-screen bg-slate-50">
-      <PageHeader
-        title="Courses"
-        description="Create, review and publish everything students can learn on NewaNext."
-        actions={
-          <>
-            <Button variant="secondary" onClick={exportCSV}>
-              <Download size={16} />
-              Export CSV
-            </Button>
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
 
-            <Button href="/admin/courses/new">
-              <Plus size={17} />
-              New course
-            </Button>
-          </>
-        }
-      />
+      <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            Courses
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+            Create, review and publish everything students can learn on
+            NewaNext.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={exportCSV}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <Download size={16} /> Export CSV
+          </button>
+          <Link
+            href="/admin/courses/new"
+            className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-violet-700"
+          >
+            <Plus size={17} /> New course
+          </Link>
+        </div>
+      </div>
 
       <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {tabs.map((item) => (
           <button
             key={item.name}
             type="button"
-            onClick={() => changeTab(item.name)}
+            onClick={() => {
+              setTab(item.name);
+              setPage(1);
+            }}
             className={`flex items-center justify-between gap-3 rounded-xl border p-4 text-left transition ${
               tab === item.name
                 ? "border-violet-300 bg-violet-50 ring-1 ring-violet-200"
@@ -310,17 +292,12 @@ export default function CoursesPage() {
             }`}
           >
             <span
-              className={`text-sm font-medium ${
-                tab === item.name ? "text-violet-700" : "text-slate-500"
-              }`}
+              className={`text-sm font-medium ${tab === item.name ? "text-violet-700" : "text-slate-500"}`}
             >
               {item.name}
             </span>
-
             <span
-              className={`text-xl font-bold ${
-                tab === item.name ? "text-violet-700" : "text-slate-900"
-              }`}
+              className={`text-xl font-bold ${tab === item.name ? "text-violet-700" : "text-slate-900"}`}
             >
               {item.count}
             </span>
@@ -330,24 +307,20 @@ export default function CoursesPage() {
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <label className="flex w-full items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 transition focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100 sm:max-w-md">
+          <label className="flex w-full items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 transition focus-within:border-violet-400 sm:max-w-md">
             <Search size={17} className="shrink-0 text-slate-400" />
-
             <input
               type="search"
               placeholder="Search courses..."
               value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
+              onChange={(e) => {
+                setQuery(e.target.value);
                 setPage(1);
               }}
               className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
             />
-
             {query && (
               <button
-                type="button"
-                aria-label="Clear search"
                 onClick={() => {
                   setQuery("");
                   setPage(1);
@@ -361,58 +334,33 @@ export default function CoursesPage() {
 
           <button
             type="button"
-            aria-expanded={showFilters}
-            onClick={() => setShowFilters((value) => !value)}
-            className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition ${
-              showFilters || category !== "All categories"
-                ? "border-violet-300 bg-violet-50 text-violet-700"
-                : "border-slate-200 text-slate-600 hover:bg-slate-50"
-            }`}
+            onClick={() => setShowFilters((v) => !v)}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
           >
-            <SlidersHorizontal size={16} />
-            Filters
+            <SlidersHorizontal size={16} /> Filters
           </button>
         </div>
 
         {showFilters && (
           <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/60 p-4 sm:flex-row sm:items-center">
-            <label
-              htmlFor="course-category"
-              className="text-sm font-medium text-slate-600"
-            >
+            <label className="text-sm font-medium text-slate-600">
               Category
             </label>
-
             <select
-              id="course-category"
               value={category}
-              onChange={(event) => {
-                setCategory(event.target.value);
+              onChange={(e) => {
+                setCategory(e.target.value);
                 setPage(1);
               }}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none"
             >
               <option>All categories</option>
-
-              {Array.from(
-                new Set(courses.map((course) => course.category)),
-              ).map((item) => (
-                <option key={item}>{item}</option>
-              ))}
+              {Array.from(new Set(courses.map((c) => c.category))).map(
+                (item) => (
+                  <option key={item}>{item}</option>
+                ),
+              )}
             </select>
-
-            <button
-              type="button"
-              onClick={() => {
-                setCategory("All categories");
-                setQuery("");
-                setTab("All");
-                setPage(1);
-              }}
-              className="text-sm font-semibold text-violet-600 hover:text-violet-800 sm:ml-auto"
-            >
-              Clear all filters
-            </button>
           </div>
         )}
 
@@ -427,195 +375,99 @@ export default function CoursesPage() {
                   "STUDENTS",
                   "RATING",
                   "STATUS",
-                  "",
-                ].map((heading, index) => (
+                  "ACTIONS",
+                ].map((heading, i) => (
                   <th
-                    key={`${heading}-${index}`}
-                    className="whitespace-nowrap px-5 py-4 text-[10px] font-bold tracking-wider text-slate-500"
+                    key={i}
+                    className="px-5 py-4 text-[10px] font-bold tracking-wider text-slate-500"
                   >
                     {heading}
                   </th>
                 ))}
               </tr>
             </thead>
-
             <tbody>
               {visibleCourses.map((course) => (
                 <tr
-                  key={course.title}
-                  className="border-b border-slate-100 transition last:border-0 hover:bg-slate-50/70"
+                  key={course.id}
+                  className="border-b border-slate-100 transition hover:bg-slate-50/70"
                 >
                   <td className="px-5 py-4">
-                    <div className="flex min-w-[250px] items-center gap-3">
+                    <div className="flex items-center gap-3">
                       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-xs font-bold text-violet-700">
                         {course.initials}
                       </span>
-
-                      <div className="min-w-0">
+                      <div>
                         <p className="max-w-xs text-sm font-semibold text-slate-800">
                           {course.title}
                         </p>
-
                         <p className="mt-1 text-xs text-slate-400">
                           {course.meta}
                         </p>
                       </div>
                     </div>
                   </td>
-
-                  <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-500">
+                  <td className="px-5 py-4 text-sm text-slate-500">
                     {course.category}
                   </td>
-
-                  <td className="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-800">
+                  <td className="px-5 py-4 text-sm font-semibold text-slate-800">
                     {course.price}
                   </td>
-
                   <td className="px-5 py-4 text-sm text-slate-600">
                     {course.students.toLocaleString()}
                   </td>
-
-                  <td className="whitespace-nowrap px-5 py-4">
+                  <td className="px-5 py-4">
                     <span className="inline-flex items-center gap-1.5 text-sm text-slate-600">
                       {course.rating !== "—" && (
                         <Star size={14} fill="#F5B544" stroke="#F5B544" />
                       )}
-
                       {course.rating}
                     </span>
                   </td>
-
-                  <td className="whitespace-nowrap px-5 py-4">
-                    <Status status={course.status} />
-                  </td>
-
-                  <td className="relative px-5 py-4">
-                    <button
-                      type="button"
-                      aria-label={`More actions for ${course.title}`}
-                      aria-expanded={menuCourse === course.title}
-                      onClick={() =>
-                        setMenuCourse((current) =>
-                          current === course.title ? null : course.title,
-                        )
-                      }
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  <td className="px-5 py-4">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusStyles[course.status]}`}
                     >
-                      <MoreHorizontal size={18} />
-                    </button>
+                      {course.status}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-1">
 
-                    {menuCourse === course.title && (
-                      <div className="absolute right-5 top-14 z-10 w-40 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
-                        <Link
-                          href={`/admin/courses/${encodeURIComponent(course.title)}/edit`}
-                          className="block rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                          onClick={() => setMenuCourse(null)}
-                        >
-                          Edit course
-                        </Link>
+                      {/* Edit Action Button */}
+                      <Link
+                        href={`/admin/courses/${course.id}/edit`}
+                        title="Edit Course"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-600"
+                      >
+                        <Edit3 size={17} />
+                      </Link>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            window.alert(`Course details: ${course.title}`);
-                            setMenuCourse(null);
-                          }}
-                          className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-                        >
-                          View details
-                        </button>
-                      </div>
-                    )}
+                      {/* Delete Action Button */}
+                      <button
+                        type="button"
+                        title="Delete Course"
+                        onClick={() => handleDelete(course)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                      >
+                        <Trash2 size={17} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
-
               {visibleCourses.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
-                      <BookOpen size={21} className="text-slate-400" />
-                    </div>
-
-                    <h3 className="mt-4 text-sm font-semibold text-slate-800">
-                      No courses found
-                    </h3>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                      Try another search term or change your filters.
-                    </p>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setQuery("");
-                        setTab("All");
-                        setCategory("All categories");
-                        setPage(1);
-                      }}
-                      className="mt-4 text-sm font-semibold text-violet-600 hover:text-violet-800"
-                    >
-                      Clear filters
-                    </button>
+                  <td
+                    colSpan={7}
+                    className="px-5 py-16 text-center text-slate-500"
+                  >
+                    No courses found in database.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
-        </div>
-
-        <div className="flex flex-col gap-4 border-t border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-          <p className="text-xs text-slate-500">
-            Showing{" "}
-            <span className="font-semibold text-slate-700">
-              {filtered.length === 0 ? 0 : startIndex + 1}–
-              {Math.min(startIndex + pageSize, filtered.length)}
-            </span>{" "}
-            of{" "}
-            <span className="font-semibold text-slate-700">
-              {filtered.length}
-            </span>{" "}
-            matching courses
-          </p>
-
-          <div className="flex flex-wrap items-center gap-1">
-            <button
-              type="button"
-              disabled={currentPage === 1}
-              onClick={() => setPage((value) => Math.max(1, value - 1))}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Previous
-            </button>
-
-            {Array.from({ length: totalPages }, (_, index) => index + 1).map(
-              (pageNumber) => (
-                <button
-                  type="button"
-                  key={pageNumber}
-                  onClick={() => setPage(pageNumber)}
-                  className={`h-8 min-w-8 rounded-lg px-2 text-xs font-medium transition ${
-                    currentPage === pageNumber
-                      ? "bg-violet-600 text-white"
-                      : "text-slate-600 hover:bg-slate-100"
-                  }`}
-                >
-                  {pageNumber}
-                </button>
-              ),
-            )}
-
-            <button
-              type="button"
-              disabled={currentPage === totalPages}
-              onClick={() =>
-                setPage((value) => Math.min(totalPages, value + 1))
-              }
-              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Next
-            </button>
-          </div>
         </div>
       </section>
     </main>

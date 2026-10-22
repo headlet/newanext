@@ -159,10 +159,10 @@ export default function NewCoursePage() {
   const [discountEnd, setDiscountEnd] = useState("");
   const [instructor, setInstructor] = useState("Suman Adhikari");
   const [tags, setTags] = useState([
-    "React",
-    "Node.js",
-    "JavaScript",
-    "Full-stack",
+    // "React",
+    // "Node.js",
+    // "JavaScript",
+    // "Full-stack",
   ]);
   const [tag, setTag] = useState("");
   const [certificate, setCertificate] = useState(true);

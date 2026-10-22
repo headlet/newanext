@@ -3,8 +3,16 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { getAllPermissions, getRole, saveRole, type Permission } from "@/app/lib/db";
-import { ArrowLeft, ShieldCheck, Check, Save } from "lucide-react";
+import Swal from "sweetalert2";
+import {
+  getAllPermissions,
+  getRole,
+  saveRole,
+  type Permission,
+} from "@/app/lib/db/role";
+import { ArrowLeft, Save } from "lucide-react";
+import { getFirebaseApp } from "@/app/lib/firebase";
+import { getAuth } from "firebase/auth";
 
 export default function RolePermissionsPage() {
   const params = useParams();
@@ -17,9 +25,39 @@ export default function RolePermissionsPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const currentAuthUser = getAuth(getFirebaseApp()).currentUser;
+
+  // Read environment variables for super-admin authorization[cite: 3]
+  const excludedEnv =
+    process.env.NEXT_PUBLIC_ADMIN_EMAILS ||
+    process.env.NEXT_PUBLIC_EXCLUDED_EMAILS ||
+    "";
+
+  const superAdminEmails = excludedEnv
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+
+  const loggedInEmail = currentAuthUser?.email?.trim().toLowerCase() || "";
+  const isCurrentSuperAdmin = superAdminEmails.includes(loggedInEmail);
+
   useEffect(() => {
     async function fetchData() {
       try {
+        const isAdminRoleRoute = roleId.toLowerCase() === "admin";
+
+        // Route/URL protection: Block access to admin role permissions if user is not the super-admin[cite: 3]
+        if (isAdminRoleRoute && !isCurrentSuperAdmin) {
+          await Swal.fire({
+            icon: "error",
+            title: "Access Denied",
+            text: "Only the designated environment super-admin can access and configure permissions for the Admin role.",
+            confirmButtonColor: "#4f46e5",
+          });
+          router.push("/admin/roles");
+          return;
+        }
+
         const [allPerms, roleData] = await Promise.all([
           getAllPermissions(),
           getRole(roleId),
@@ -37,13 +75,13 @@ export default function RolePermissionsPage() {
       }
     }
     fetchData();
-  }, [roleId]);
+  }, [roleId, isCurrentSuperAdmin, router]);
 
   const handleCheckboxChange = (permId: string) => {
     setSelectedPermissions((prev) =>
       prev.includes(permId)
         ? prev.filter((id) => id !== permId)
-        : [...prev, permId]
+        : [...prev, permId],
     );
   };
 
@@ -51,18 +89,29 @@ export default function RolePermissionsPage() {
     setSaving(true);
     try {
       await saveRole(roleId, roleName, selectedPermissions);
-      alert("Permissions updated successfully!");
+      await Swal.fire({
+        icon: "success",
+        title: "Success!",
+        text: "Permissions updated successfully!",
+        timer: 2000,
+        showConfirmButton: false,
+      });
       router.push("/admin/roles");
     } catch (error) {
       console.error("Failed to save permissions:", error);
-      alert("Error saving permissions.");
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "Error saving permissions.",
+        confirmButtonColor: "#4f46e5",
+      });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 max-w-4xl mx-auto">
+    <main className="min-h-screen bg-slate-50 max-w-4xl mx-auto p-6">
       {/* Top Back Link & Header */}
       <div className="mb-6">
         <Link
@@ -78,7 +127,13 @@ export default function RolePermissionsPage() {
               Configure Permissions
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Role: <span className="font-semibold text-slate-800">{roleName || roleId}</span> (<span className="font-mono text-xs text-slate-400">{roleId}</span>)
+              Role:{" "}
+              <span className="font-semibold text-slate-800">
+                {roleName || roleId}
+              </span>{" "}
+              (
+              <span className="font-mono text-xs text-slate-400">{roleId}</span>
+              )
             </p>
           </div>
         </div>
@@ -87,16 +142,24 @@ export default function RolePermissionsPage() {
       {/* Permissions Checkbox Card Grid */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm mb-6">
         <div className="border-b border-slate-100 bg-slate-50/80 px-6 py-4">
-          <h2 className="text-xs font-bold tracking-wider text-slate-500 uppercase">Available System Permissions</h2>
+          <h2 className="text-xs font-bold tracking-wider text-slate-500 uppercase">
+            Available System Permissions
+          </h2>
         </div>
 
         <div className="p-6 divide-y divide-slate-100">
           {loading ? (
-            <p className="py-8 text-center text-sm text-slate-500">Loading permissions...</p>
+            <p className="py-8 text-center text-sm text-slate-500">
+              Loading permissions...
+            </p>
           ) : permissions.length === 0 ? (
             <div className="py-8 text-center">
               <p className="text-sm text-slate-500">
-                No permissions found in Firestore. Add documents to the <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs">permissions</code> collection first.
+                No permissions found in Firestore. Add documents to the{" "}
+                <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs">
+                  permissions
+                </code>{" "}
+                collection first.
               </p>
             </div>
           ) : (
@@ -115,12 +178,16 @@ export default function RolePermissionsPage() {
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-slate-800">{perm.name}</p>
+                      <p className="text-sm font-semibold text-slate-800">
+                        {perm.name}
+                      </p>
                       <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-500">
                         {perm.id}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">{perm.description}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {perm.description}
+                    </p>
                   </div>
                 </label>
               );

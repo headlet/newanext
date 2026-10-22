@@ -22,8 +22,7 @@ import {
   AlertCircle,
   Check,
 } from "lucide-react";
-import { collection, addDoc, getFirestore } from "firebase/firestore";
-import { getFirebaseApp } from "@/app/lib/firebase";
+import { createCourseInDb } from "@/app/lib/db/courses";
 
 type Lesson = [string, string];
 
@@ -33,14 +32,15 @@ type CourseSection = {
   lessons: Lesson[];
 };
 
-// Toast Notification Component
-type ToastProps = {
+function Toast({
+  message,
+  type,
+  onClose,
+}: {
   message: string;
   type: "success" | "error";
   onClose: () => void;
-};
-
-function Toast({ message, type, onClose }: ToastProps) {
+}) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3500);
     return () => clearTimeout(timer);
@@ -146,8 +146,6 @@ export default function NewCoursePage() {
   const [imageName, setImageName] = useState("");
 
   const [sectionsList, setSectionsList] = useState<CourseSection[]>([]);
-
-  // Track which section currently has the "Add Lesson" form open
   const [activeSectionForLesson, setActiveSectionForLesson] = useState<
     number | null
   >(null);
@@ -159,10 +157,10 @@ export default function NewCoursePage() {
   const [discountEnd, setDiscountEnd] = useState("");
   const [instructor, setInstructor] = useState("Suman Adhikari");
   const [tags, setTags] = useState([
-    // "React",
-    // "Node.js",
-    // "JavaScript",
-    // "Full-stack",
+    "React",
+    "Node.js",
+    "JavaScript",
+    "Full-stack",
   ]);
   const [tag, setTag] = useState("");
   const [certificate, setCertificate] = useState(true);
@@ -188,7 +186,7 @@ export default function NewCoursePage() {
     setSectionsList((old) => [
       ...old,
       {
-        title: "", // Starts completely blank for user input
+        title: "",
         duration: "0m",
         lessons: [],
       },
@@ -268,7 +266,6 @@ export default function NewCoursePage() {
 
     try {
       setSubmitting(true);
-      const db = getFirestore(getFirebaseApp());
 
       const sanitizedSections = sectionsList.map((section) => ({
         title: section.title || "Untitled Section",
@@ -279,7 +276,7 @@ export default function NewCoursePage() {
         })),
       }));
 
-      await addDoc(collection(db, "courses"), {
+      await createCourseInDb({
         title,
         subtitle,
         description,
@@ -295,10 +292,6 @@ export default function NewCoursePage() {
         certificate,
         studentQA,
         sections: sanitizedSections,
-        students: 0,
-        rating: "—",
-        meta: "Created just now",
-        createdAt: new Date().toISOString(),
       });
 
       setToast({
@@ -622,7 +615,6 @@ export default function NewCoursePage() {
                               </p>
                             )}
 
-                          {/* Inline Lesson Input Form */}
                           {activeSectionForLesson === index ? (
                             <div className="bg-gray-50/80 p-4 pl-8 sm:pl-12 space-y-3 border-t border-gray-100">
                               <p className="text-xs font-bold uppercase tracking-wider text-indigo-600">
@@ -770,7 +762,6 @@ export default function NewCoursePage() {
 
           {/* Sidebar */}
           <aside className="min-w-0 space-y-6 xl:sticky xl:top-6">
-            {/* Checklist */}
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <h2 className="font-semibold text-gray-900">Publish checklist</h2>
               <p className="mt-1 text-sm text-gray-500">
@@ -779,22 +770,13 @@ export default function NewCoursePage() {
 
               <div className="mt-5 space-y-4">
                 {[
-                  {
-                    label: "Title and subtitle",
-                    complete: isBasicComplete,
-                  },
-                  {
-                    label: "Description",
-                    complete: isDescriptionComplete,
-                  },
+                  { label: "Title and subtitle", complete: isBasicComplete },
+                  { label: "Description", complete: isDescriptionComplete },
                   {
                     label: "Curriculum has sections",
                     complete: sectionsList.length > 0,
                   },
-                  {
-                    label: "Pricing set",
-                    complete: isPricingComplete,
-                  },
+                  { label: "Pricing set", complete: isPricingComplete },
                   {
                     label: "Instructor selected",
                     complete: Boolean(instructor),
@@ -812,7 +794,6 @@ export default function NewCoursePage() {
                     ) : (
                       <span className="size-[17px] shrink-0 rounded-full border-2 border-gray-300" />
                     )}
-
                     <span
                       className={
                         item.complete ? "text-gray-700" : "text-gray-500"
@@ -825,7 +806,6 @@ export default function NewCoursePage() {
               </div>
             </section>
 
-            {/* Cover image */}
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <h2 className="font-semibold text-gray-900">Cover image</h2>
               <p className="mt-1 text-sm text-gray-500">
@@ -834,24 +814,19 @@ export default function NewCoursePage() {
 
               <label className="mt-4 flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center transition hover:border-indigo-400 hover:bg-indigo-50/50">
                 <UploadCloud size={27} className="mb-3 text-gray-400" />
-
                 <strong className="max-w-full break-words text-sm font-medium text-gray-700">
                   {imageName || "Drop an image or browse"}
                 </strong>
-
                 <span className="mt-2 text-xs text-gray-400">
                   1280 × 720 px · JPG or PNG · Under 2 MB
                 </span>
-
                 <input
                   type="file"
                   accept="image/png,image/jpeg"
                   className="sr-only"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-
                     if (!file) return;
-
                     if (file.size > 2 * 1024 * 1024) {
                       setToast({
                         message: "Please select an image smaller than 2 MB.",
@@ -860,14 +835,12 @@ export default function NewCoursePage() {
                       e.target.value = "";
                       return;
                     }
-
                     setImageName(file.name);
                   }}
                 />
               </label>
             </section>
 
-            {/* Settings */}
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <h2 className="mb-5 font-semibold text-gray-900">Settings</h2>
 
@@ -895,7 +868,6 @@ export default function NewCoursePage() {
                         {item}
                         <button
                           type="button"
-                          aria-label={`Remove ${item} tag`}
                           onClick={() =>
                             setTags((old) =>
                               old.filter((existing) => existing !== item),
@@ -915,9 +887,7 @@ export default function NewCoursePage() {
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && tag.trim()) {
                           e.preventDefault();
-
                           const newTag = tag.trim();
-
                           if (
                             !tags.some(
                               (existing) =>
@@ -926,7 +896,6 @@ export default function NewCoursePage() {
                           ) {
                             setTags((old) => [...old, newTag]);
                           }
-
                           setTag("");
                         }
                       }}
@@ -962,11 +931,9 @@ export default function NewCoursePage() {
               </div>
             </section>
 
-            {/* Summary */}
             <section className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-5">
               <div className="flex items-center gap-2 text-sm font-semibold text-indigo-900">
-                <Clock3 size={16} />
-                Course summary
+                <Clock3 size={16} /> Course summary
               </div>
 
               <div className="mt-4 space-y-3 text-sm">

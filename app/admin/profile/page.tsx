@@ -45,7 +45,7 @@ import {
 } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getFirebaseAuth } from "@/app/lib/firebase";
-import { getUserProfile, saveUserProfile } from "@/app/lib/db";
+import { getUserProfile, saveUserProfile } from "@/app/lib/db/user";
 
 type TabId = "profile" | "security" | "notifications" | "preferences";
 

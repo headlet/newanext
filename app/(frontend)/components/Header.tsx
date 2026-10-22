@@ -1,12 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { LogOut } from "lucide-react";
+import { logoutUser } from "@/app/lib/auth";
+import { getAuth, onAuthStateChanged, type User } from "firebase/auth";
+import { getFirebaseApp } from "@/app/lib/firebase";
 
 /* ------------------------------------------------------------------ */
-/*  CONTENT (same as before — edit here only)                          */
+/*  CONTENT (same as before — edit here only)                         */
 /* ------------------------------------------------------------------ */
 
 const NAV_LINKS = [
@@ -169,10 +173,37 @@ function Icon({ name, className = 'h-4 w-4' }: { name: string; className?: strin
 
 /* ------------------------------------------------------------------ */
 /*  COMPONENT                                                          */
-/*  Palette: gray-900 text · blue-600 → purple-600 → pink-500 gradient (same as original)             */
 /* ------------------------------------------------------------------ */
 
 export default function Header() {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  useEffect(() => {
+    const auth = getAuth(getFirebaseApp());
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+
+    setIsLoggingOut(true);
+
+    try {
+      await logoutUser();
+      window.location.replace("/login");
+    } catch (error) {
+      console.error("Logout failed:", error);
+      alert("Failed to log out. Please try again.");
+      setIsLoggingOut(false);
+    }
+  };
+
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [coursesOpen, setCoursesOpen] = useState(false);
@@ -313,15 +344,29 @@ export default function Header() {
 
           {/* Right side */}
           <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="hidden items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500 py-2.5 pl-5 pr-2.5 text-sm font-bold text-white shadow-md transition hover:shadow-lg hover:opacity-95 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9333EA] md:inline-flex"
-            >
-              Login
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/25 text-white">
-                <Icon name="arrow" className="h-3.5 w-3.5" />
-              </span>
-            </Link>
+            {!authLoading && (
+              currentUser ? (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  className="hidden items-center gap-2 rounded-full border border-red-200 bg-red-50 py-2.5 px-5 text-sm font-bold text-red-600 shadow-sm transition hover:bg-red-100 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-60 md:inline-flex"
+                >
+                  <LogOut size={16} />
+                  <span>{isLoggingOut ? "Logging out..." : "Logout"}</span>
+                </button>
+              ) : (
+                <Link
+                  href="/login"
+                  className="hidden items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500 py-2.5 pl-5 pr-2.5 text-sm font-bold text-white shadow-md transition hover:shadow-lg hover:opacity-95 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9333EA] md:inline-flex"
+                >
+                  Login
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/25 text-white">
+                    <Icon name="arrow" className="h-3.5 w-3.5" />
+                  </span>
+                </Link>
+              )
+            )}
 
             <button
               type="button"
@@ -540,13 +585,27 @@ export default function Header() {
           </div>
 
           <div className="shrink-0 border-t border-[#111827]/10 p-5">
-            <Link
-              href="/login"
-              onClick={closeMobile}
-              className="block w-full rounded-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500 py-3.5 shadow-lg text-center text-sm font-bold text-white"
-            >
-              Login / Sign Up
-            </Link>
+            {!authLoading && (
+              currentUser ? (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-50 border border-red-200 py-3.5 text-sm font-bold text-red-600 transition hover:bg-red-100 disabled:opacity-60"
+                >
+                  <LogOut size={18} />
+                  <span>{isLoggingOut ? "Logging out..." : "Logout"}</span>
+                </button>
+              ) : (
+                <Link
+                  href="/login"
+                  onClick={closeMobile}
+                  className="block w-full rounded-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500 py-3.5 shadow-lg text-center text-sm font-bold text-white"
+                >
+                  Login / Sign Up
+                </Link>
+              )
+            )}
             <p className="mt-3 text-center text-xs font-medium text-[#111827]/50">© NewaNext Technologies</p>
           </div>
         </aside>

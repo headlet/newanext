@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
+import Swal from "sweetalert2";
 import {
   Download,
   Plus,
@@ -34,11 +35,10 @@ import {
 import {
   getAllUsers,
   saveUserProfile,
-  getAllRoles,
+  deleteUserFromDb,
   type UserProfile,
-  type Role,
-} from "@/app/lib/db";
-import { doc, deleteDoc, getFirestore } from "firebase/firestore";
+} from "@/app/lib/db/user";
+import { getAllRoles, type Role } from "@/app/lib/db/role";
 import { getFirebaseApp } from "@/app/lib/firebase";
 import { getAuth } from "firebase/auth";
 
@@ -53,8 +53,8 @@ type SystemUser = {
   phone?: string;
   jobTitle?: string;
   about?: string;
-  roleId?: string; // Linked role ID
-  roleName?: string; // Display role name
+  roleId?: string;
+  roleName?: string;
   initials: string;
   courses: number;
   progress: number;
@@ -67,7 +67,6 @@ type SystemUser = {
 
 const tabs = ["All users", "Active", "Inactive", "Suspended"];
 
-// Toast Notification Component
 type ToastProps = {
   message: string;
   type: "success" | "error";
@@ -104,11 +103,13 @@ function Button({
   onClick,
   variant = "primary",
   type = "button",
+  disabled = false,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   variant?: "primary" | "secondary" | "danger";
   type?: "button" | "submit";
+  disabled?: boolean;
 }) {
   const styles = {
     primary:
@@ -123,7 +124,8 @@ function Button({
     <button
       type={type}
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition duration-200 ${styles[variant]}`}
+      disabled={disabled}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${styles[variant]}`}
     >
       {children}
     </button>
@@ -246,6 +248,20 @@ export default function UsersPage() {
   const currentAuthUser = getAuth(getFirebaseApp()).currentUser;
   const pageSize = 5;
 
+  // Helper check for Super Admin environment email authorization
+  const excludedEnv =
+    process.env.NEXT_PUBLIC_ADMIN_EMAILS ||
+    process.env.NEXT_PUBLIC_EXCLUDED_EMAILS ||
+    "";
+
+  const superAdminEmails = excludedEnv
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+
+  const loggedInEmail = currentAuthUser?.email?.trim().toLowerCase() || "";
+  const isCurrentSuperAdmin = superAdminEmails.includes(loggedInEmail);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -261,9 +277,15 @@ export default function UsersPage() {
       setRolesList(fetchedRoles);
 
       if (usersList.length > 0) {
-        const filteredList = usersList.filter(
-          (u) => u.uid !== currentAuthUser?.uid,
-        );
+        const filteredList = usersList.filter((u) => {
+          const userEmail = u.email?.trim().toLowerCase() || "";
+          const isCurrentAuthUser =
+            u.uid === currentAuthUser?.uid ||
+            userEmail === currentAuthUser?.email?.trim().toLowerCase();
+          const isExcludedEnv = superAdminEmails.includes(userEmail);
+
+          return !isCurrentAuthUser && !isExcludedEnv; // Hides them from list[cite: 3]
+        });
 
         const mappedUsers: SystemUser[] = filteredList.map((user: any) => {
           const fullName = user.name || "Unnamed User";
@@ -276,7 +298,6 @@ export default function UsersPage() {
               ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
               : fullName.substring(0, 2).toUpperCase();
 
-          // Match role name if user has roleId or role name stored
           const matchedRole = fetchedRoles.find(
             (r) =>
               r.id === user.roleId ||
@@ -357,40 +378,72 @@ export default function UsersPage() {
     setPage(1);
   }
 
+  // Handle Edit Action with Protection
+  function handleOpenEdit(user: SystemUser) {
+    const isAdminRole = user.roleName?.toLowerCase() === "admin" || user.roleId?.toLowerCase() === "admin";
+
+    if (isAdminRole && !isCurrentSuperAdmin) {
+      Swal.fire({
+        icon: "error",
+        title: "Action Denied",
+        text: "Only the designated environment super-admin can edit accounts with the Admin role.",
+        confirmButtonColor: "#4f46e5",
+      });
+      return;
+    }
+    setEditingUser(user);
+  }
+
+  // Handle Delete Action with Protection
   async function handleDelete(user: SystemUser) {
-    if (user.roleName?.toLowerCase() === "admin") {
-      setToast({
-        message: `Action denied: Admins cannot be deleted.`,
-        type: "error",
+    const isAdminRole = user.roleName?.toLowerCase() === "admin" || user.roleId?.toLowerCase() === "admin";
+
+    if (isAdminRole && !isCurrentSuperAdmin) {
+      Swal.fire({
+        icon: "error",
+        title: "Action Denied",
+        text: "Only the designated environment super-admin can delete accounts with the Admin role.",
+        confirmButtonColor: "#4f46e5",
       });
       return;
     }
 
-    if (
-      !window.confirm(
-        `Are you sure you want to permanently delete ${user.name}?`,
-      )
-    ) {
+    const result = await Swal.fire({
+      title: "Are you sure?",
+      text: `You are about to permanently delete ${user.name}. This action cannot be undone!`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#e11d48",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Yes, delete it!",
+    });
+
+    if (!result.isConfirmed) {
       return;
     }
 
     try {
-      const db = getFirestore(getFirebaseApp());
-      await deleteDoc(doc(db, "users", user.id));
+      await deleteUserFromDb(user.id);
 
       setUsers((current) => current.filter((item) => item.id !== user.id));
       if (selectedId === user.id) {
         setSelectedId(null);
       }
-      setToast({
-        message: `${user.name} deleted successfully.`,
-        type: "success",
+      
+      Swal.fire({
+        icon: "success",
+        title: "Deleted!",
+        text: `${user.name} has been deleted successfully.`,
+        timer: 2000,
+        showConfirmButton: false,
       });
     } catch (error) {
       console.error("Failed to delete user:", error);
-      setToast({
-        message: "Failed to delete user from database.",
-        type: "error",
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "Failed to delete user from database.",
+        confirmButtonColor: "#4f46e5",
       });
     }
   }
@@ -414,7 +467,6 @@ export default function UsersPage() {
         ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
         : updatedFullName.substring(0, 2).toUpperCase();
 
-    // Find selected role details by roleId
     const selectedRoleObj = rolesList.find((r) => r.id === editingUser.roleId);
     const resolvedRoleName = selectedRoleObj
       ? selectedRoleObj.name
@@ -427,7 +479,7 @@ export default function UsersPage() {
       jobTitle: editingUser.jobTitle || "",
       about: editingUser.about || "",
       roleId: editingUser.roleId || "",
-      role: resolvedRoleName, // Stores role name/reference
+      role: resolvedRoleName,
       status: editingUser.status,
     };
 
@@ -647,94 +699,103 @@ export default function UsersPage() {
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {pageUsers.map((user) => (
-                  <tr
-                    key={user.id}
-                    onClick={() => setSelectedId(user.id)}
-                    className={`cursor-pointer transition ${
-                      selectedId === user.id
-                        ? "bg-indigo-50/60"
-                        : "hover:bg-slate-50/80"
-                    }`}
-                  >
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-xs font-bold text-indigo-700">
-                          {user.initials}
-                        </span>
-                        <span className="min-w-0">
-                          <strong className="block truncate text-sm font-semibold text-slate-800">
-                            {user.name}
-                          </strong>
-                          <span className="mt-1 block truncate text-xs text-slate-400">
-                            {user.email}
+                {pageUsers.map((user) => {
+                  const isAdminRole = user.roleName?.toLowerCase() === "admin" || user.roleId?.toLowerCase() === "admin";
+                  const blockAdminAction = isAdminRole && !isCurrentSuperAdmin;
+
+                  return (
+                    <tr
+                      key={user.id}
+                      onClick={() => setSelectedId(user.id)}
+                      className={`cursor-pointer transition ${
+                        selectedId === user.id
+                          ? "bg-indigo-50/60"
+                          : "hover:bg-slate-50/80"
+                      }`}
+                    >
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-xs font-bold text-indigo-700">
+                            {user.initials}
                           </span>
+                          <span className="min-w-0">
+                            <strong className="block truncate text-sm font-semibold text-slate-800">
+                              {user.name}
+                            </strong>
+                            <span className="mt-1 block truncate text-xs text-slate-400">
+                              {user.email}
+                            </span>
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-4 text-sm font-medium text-slate-600">
+                        <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                          {user.roleName || "User"}
                         </span>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="px-4 py-4 text-sm font-medium text-slate-600">
-                      <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
-                        {user.roleName || "User"}
-                      </span>
-                    </td>
+                      <td className="px-4 py-4">
+                        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600">
+                          <BookOpen size={14} className="text-slate-400" />
+                          {user.courses}
+                        </span>
+                      </td>
 
-                    <td className="px-4 py-4">
-                      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600">
-                        <BookOpen size={14} className="text-slate-400" />
-                        {user.courses}
-                      </span>
-                    </td>
+                      <td className="px-4 py-4">
+                        <ProgressBar value={user.progress} />
+                      </td>
 
-                    <td className="px-4 py-4">
-                      <ProgressBar value={user.progress} />
-                    </td>
+                      <td className="px-4 py-4">
+                        <Status status={user.status} />
+                      </td>
 
-                    <td className="px-4 py-4">
-                      <Status status={user.status} />
-                    </td>
-
-                    <td className="px-4 py-4 text-right">
-                      <div
-                        className="flex items-center justify-end gap-1"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          type="button"
-                          title="View Details"
-                          onClick={() => setSelectedId(user.id)}
-                          className="rounded-lg p-2 text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600"
+                      <td className="px-4 py-4 text-right">
+                        <div
+                          className="flex items-center justify-end gap-1"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <Eye size={17} />
-                        </button>
-                        <button
-                          type="button"
-                          title="Edit User"
-                          onClick={() => setEditingUser(user)}
-                          className="rounded-lg p-2 text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-600"
-                        >
-                          <Edit3 size={17} />
-                        </button>
-                        <button
-                          type="button"
-                          title={
-                            user.roleName?.toLowerCase() === "admin"
-                              ? "Admins cannot be deleted"
-                              : "Delete User"
-                          }
-                          onClick={() => handleDelete(user)}
-                          className={`rounded-lg p-2 transition ${
-                            user.roleName?.toLowerCase() === "admin"
-                              ? "opacity-30 cursor-not-allowed text-slate-300"
-                              : "text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                          }`}
-                        >
-                          <Trash2 size={17} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          <button
+                            type="button"
+                            title="View Details"
+                            onClick={() => setSelectedId(user.id)}
+                            className="rounded-lg p-2 text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600"
+                          >
+                            <Eye size={17} />
+                          </button>
+                          {/* Dim/disable Edit button if non-super-admin tries to edit an admin */}
+                          <button
+                            type="button"
+                            title={blockAdminAction ? "Admins cannot be edited" : "Edit User"}
+                            disabled={blockAdminAction}
+                            onClick={() => handleOpenEdit(user)}
+                            className={`rounded-lg p-2 transition ${
+                              blockAdminAction
+                                ? "opacity-30 cursor-not-allowed text-slate-300"
+                                : "text-slate-400 hover:bg-emerald-50 hover:text-emerald-600"
+                            }`}
+                          >
+                            <Edit3 size={17} />
+                          </button>
+                          {/* Dim/disable Delete button if non-super-admin tries to delete an admin */}
+                          <button
+                            type="button"
+                            title={blockAdminAction ? "Admins cannot be deleted" : "Delete User"}
+                            disabled={blockAdminAction}
+                            onClick={() => handleDelete(user)}
+                            className={`rounded-lg p-2 transition ${
+                              blockAdminAction
+                                ? "opacity-30 cursor-not-allowed text-slate-300"
+                                : "text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                            }`}
+                          >
+                            <Trash2 size={17} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
 
                 {pageUsers.length === 0 && (
                   <tr>
@@ -848,18 +909,18 @@ export default function UsersPage() {
               <div className="flex gap-2 pt-2">
                 <Button
                   variant="secondary"
-                  onClick={() => setEditingUser(selected)}
+                  disabled={(selected.roleName?.toLowerCase() === "admin" || selected.roleId?.toLowerCase() === "admin") && !isCurrentSuperAdmin}
+                  onClick={() => handleOpenEdit(selected)}
                 >
                   <Edit3 size={15} /> Edit
                 </Button>
-                {selected.roleName?.toLowerCase() !== "admin" && (
-                  <Button
-                    variant="danger"
-                    onClick={() => handleDelete(selected)}
-                  >
-                    <Trash2 size={15} /> Delete
-                  </Button>
-                )}
+                <Button
+                  variant="danger"
+                  disabled={(selected.roleName?.toLowerCase() === "admin" || selected.roleId?.toLowerCase() === "admin") && !isCurrentSuperAdmin}
+                  onClick={() => handleDelete(selected)}
+                >
+                  <Trash2 size={15} /> Delete
+                </Button>
               </div>
 
               <button

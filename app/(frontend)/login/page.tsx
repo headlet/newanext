@@ -22,7 +22,7 @@ import {
 } from "firebase/auth";
 
 import { getFirebaseAuth } from "../../lib/firebase";
-import { getUserProfile, saveUserProfile } from "@/app/lib/db";
+import { getUserProfile, saveUserProfile } from "@/app/lib/db/user";
 import { useRouter } from "next/navigation";
 
 type AuthTab = "signin" | "signup";

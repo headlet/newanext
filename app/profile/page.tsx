@@ -45,7 +45,7 @@ import {
 } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getFirebaseAuth } from "@/app/lib/firebase";
-import { getUserProfile, saveUserProfile } from "@/app/lib/db";
+import { getUserProfile, saveUserProfile } from "@/app/lib/db/user";
 
 type TabId = "profile" | "security" | "notifications" | "preferences";
 
@@ -395,7 +395,6 @@ export default function ProfileSettingsPage() {
     const input = event.target;
     const file = input.files?.[0];
 
-    // Reset the input so the same file can be selected again.
     input.value = "";
 
     if (!file) return;
@@ -421,7 +420,6 @@ export default function ProfileSettingsPage() {
     setIsUploadingAvatar(true);
 
     try {
-      // 1. Upload the actual image file.
       const storage = getStorage(auth.app);
       const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
 
@@ -434,13 +432,10 @@ export default function ProfileSettingsPage() {
         contentType: file.type,
       });
 
-      // 2. Get the hosted image URL.
       const photoURL = await getDownloadURL(imageRef);
 
-      // 3. Update the preview only after Storage returns a valid URL.
       setAvatar(photoURL);
 
-      // 4. Save the URL to Firestore.
       try {
         await saveUserProfile(user.uid, { photoURL });
       } catch (error) {
@@ -452,12 +447,10 @@ export default function ProfileSettingsPage() {
         return;
       }
 
-      // 5. Synchronize the Firebase Auth profile.
       try {
         await updateAuthProfile(user, { photoURL });
       } catch (error) {
         console.error("Failed to update Firebase Auth photoURL:", error);
-        // Firestore already contains the URL, so the saved image can still load.
       }
 
       triggerToast("Profile picture updated successfully!");
@@ -468,9 +461,6 @@ export default function ProfileSettingsPage() {
         code?: string;
         message?: string;
       };
-
-      console.error("Firebase error code:", firebaseError.code);
-      console.error("Firebase error message:", firebaseError.message);
 
       triggerToast(
         `Image upload failed: ${
@@ -589,16 +579,6 @@ export default function ProfileSettingsPage() {
     }
   }
 
-  function handleNotificationSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    triggerToast("Notification preferences updated successfully!");
-  }
-
-  function handlePreferenceSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    triggerToast("Preferences saved successfully!");
-  }
-
   function togglePasswordVisibility(key: keyof typeof visiblePasswords) {
     setVisiblePasswords((previous) => ({
       ...previous,
@@ -609,16 +589,6 @@ export default function ProfileSettingsPage() {
   function revokeSession(id: number) {
     setSessions((previous) => previous.filter((session) => session.id !== id));
     triggerToast("Session revoked successfully.");
-  }
-
-  function disableTwoFactor() {
-    setTwoFactor(false);
-    triggerToast("Two-factor authentication disabled.");
-  }
-
-  function enableTwoFactor() {
-    setTwoFactor(true);
-    triggerToast("Two-factor authentication enabled successfully!");
   }
 
   if (loadingUser) {
@@ -633,8 +603,7 @@ export default function ProfileSettingsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f6f7fb] px-4 py-6 sm:px-6 lg:px-8 relative">
-      {/* Toast Notification Banner */}
+    <main className="min-h-screen bg-[#f6f7fb] relative">
       <div
         role="status"
         aria-live="polite"
@@ -659,7 +628,6 @@ export default function ProfileSettingsPage() {
       </div>
 
       <div className="mx-auto max-w-7xl">
-        {/* Header */}
         <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-600">
@@ -690,7 +658,6 @@ export default function ProfileSettingsPage() {
           </div>
         </div>
 
-        {/* Profile overview */}
         <section className="relative mb-7 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="h-32 bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-500 sm:h-40">
             <div className="absolute right-0 top-0 h-52 w-52 translate-x-12 -translate-y-16 rounded-full border-[28px] border-white/10" />
@@ -780,9 +747,7 @@ export default function ProfileSettingsPage() {
           </div>
         </section>
 
-        {/* Main layout */}
         <div className="grid items-start gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-          {/* Navigation */}
           <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
             <p className="px-3 pb-3 pt-2 text-xs font-bold uppercase tracking-wider text-slate-400">
               Account settings
@@ -837,30 +802,8 @@ export default function ProfileSettingsPage() {
                 );
               })}
             </nav>
-
-            <div className="mx-3 my-4 border-t border-slate-100" />
-
-            <div className="rounded-xl bg-slate-50 p-4">
-              <div className="mb-2 flex items-center gap-2 text-slate-700">
-                <ShieldCheck size={17} className="text-indigo-600" />
-                <span className="text-sm font-bold">Stay secure</span>
-              </div>
-
-              <p className="text-xs leading-5 text-slate-500">
-                Use a unique password and review your active sessions regularly.
-              </p>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab("security")}
-                className="mt-3 text-xs font-bold text-indigo-600 hover:text-indigo-800"
-              >
-                Review security →
-              </button>
-            </div>
           </aside>
 
-          {/* Content */}
           <div className="min-w-0 space-y-6">
             {activeTab === "profile" && (
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
@@ -1000,8 +943,6 @@ export default function ProfileSettingsPage() {
                     </div>
                   </form>
                 </section>
-
-                {/* Two-factor authentication section intentionally remains disabled. */}
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
                   <SectionHeading

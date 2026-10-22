@@ -11,7 +11,7 @@ import {
 } from "firebase/auth";
 
 import { getFirebaseAuth } from "./firebase";
-import { getUserProfile, saveUserProfile } from "./db";
+import { getUserProfile, saveUserProfile } from "./db/user";
 
 export async function registerUser(
   name: string,

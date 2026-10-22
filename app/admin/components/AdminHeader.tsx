@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { onAuthStateChanged } from "firebase/auth";
 import { getFirebaseAuth } from "@/app/lib/firebase";
-import { getUserProfile } from "@/app/lib/db";
+import { getUserProfile } from "@/app/lib/db/user";
 
 type AdminHeaderProps = {
   onMenuClick: () => void;

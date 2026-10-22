@@ -8,23 +8,15 @@ import {
   Search,
   SlidersHorizontal,
   Star,
-  BookOpen,
   X,
   Loader2,
   Trash2,
   Edit3,
-  Eye,
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
-import {
-  collection,
-  getDocs,
-  deleteDoc,
-  doc,
-  getFirestore,
-} from "firebase/firestore";
-import { getFirebaseApp } from "@/app/lib/firebase";
+import Swal from "sweetalert2";
+import { fetchAllCourses, deleteCourseFromDb } from "@/app/lib/db/courses";
 
 type CourseStatus = "Published" | "In review" | "Draft";
 
@@ -95,44 +87,15 @@ export default function CoursesPage() {
 
   const pageSize = 6;
 
-  // Fetch courses from Firestore on mount
   useEffect(() => {
-    fetchCourses();
+    loadCourses();
   }, []);
 
-  async function fetchCourses() {
+  async function loadCourses() {
     try {
       setLoading(true);
-      const db = getFirestore(getFirebaseApp());
-      const querySnapshot = await getDocs(collection(db, "courses"));
-
-      const fetchedCourses: Course[] = [];
-      querySnapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        const title = data.title || "Untitled Course";
-        const initials = title
-          .split(" ")
-          .map((n: string) => n[0])
-          .join("")
-          .substring(0, 2)
-          .toUpperCase();
-
-        fetchedCourses.push({
-          id: docSnap.id,
-          title: title,
-          initials: initials || "C",
-          meta: data.meta || "Updated recently",
-          category: data.category || "General",
-          price: data.price
-            ? `NPR ${Number(data.price).toLocaleString("en-NP")}`
-            : "NPR 0",
-          students: data.students || 0,
-          rating: data.rating || "—",
-          status: data.status || "Draft",
-        });
-      });
-
-      setCourses(fetchedCourses);
+      const fetchedCourses = await fetchAllCourses();
+      setCourses(fetchedCourses as Course[]);
     } catch (error) {
       console.error("Error fetching courses:", error);
       setToast({
@@ -144,18 +107,34 @@ export default function CoursesPage() {
     }
   }
 
+  // UI-rich SweetAlert2 delete confirmation
   async function handleDelete(course: Course) {
-    if (!window.confirm(`Are you sure you want to delete "${course.title}"?`))
-      return;
+    const result = await Swal.fire({
+      title: "Are you sure?",
+      text: `You won't be able to revert the deletion of "${course.title}"!`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#7c3aed", // Violet-600 matching your theme
+      cancelButtonColor: "#cbd5e1", // Slate-300
+      confirmButtonText: "Yes, delete it!",
+      cancelButtonText: "Cancel",
+      customClass: {
+        popup: "rounded-2xl",
+        confirmButton: "rounded-xl px-4 py-2.5 text-sm font-semibold shadow-sm",
+        cancelButton:
+          "rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm",
+      },
+    });
 
-    try {
-      const db = getFirestore(getFirebaseApp());
-      await deleteDoc(doc(db, "courses", course.id));
-      setCourses((current) => current.filter((c) => c.id !== course.id));
-      setToast({ message: "Course deleted successfully.", type: "success" });
-    } catch (error) {
-      console.error("Failed to delete course:", error);
-      setToast({ message: "Failed to delete course.", type: "error" });
+    if (result.isConfirmed) {
+      try {
+        await deleteCourseFromDb(course.id);
+        setCourses((current) => current.filter((c) => c.id !== course.id));
+        setToast({ message: "Course deleted successfully.", type: "success" });
+      } catch (error) {
+        console.error("Failed to delete course:", error);
+        setToast({ message: "Failed to delete course.", type: "error" });
+      }
     }
   }
 
@@ -433,8 +412,6 @@ export default function CoursesPage() {
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-1">
-
-                      {/* Edit Action Button */}
                       <Link
                         href={`/admin/courses/${course.id}/edit`}
                         title="Edit Course"
@@ -443,7 +420,6 @@ export default function CoursesPage() {
                         <Edit3 size={17} />
                       </Link>
 
-                      {/* Delete Action Button */}
                       <button
                         type="button"
                         title="Delete Course"

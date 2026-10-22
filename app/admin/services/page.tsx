@@ -1,8 +1,8 @@
-
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
+import Swal from "sweetalert2";
 import {
   Plus,
   Search,
@@ -16,89 +16,9 @@ import {
   Cloud,
   Megaphone,
   Layers,
+  Loader2,
 } from "lucide-react";
-
-type ServiceStatus = "Published" | "Draft";
-
-type Service = {
-  id: number;
-  title: string;
-  category: string;
-  description: string;
-  price: number;
-  pricingType: "Starting at" | "Fixed" | "Custom";
-  status: ServiceStatus;
-  icon: string;
-};
-
-const initialServices: Service[] = [
-  {
-    id: 1,
-    title: "Web Development",
-    category: "Development",
-    description:
-      "Responsive and scalable websites built around your business requirements.",
-    price: 25000,
-    pricingType: "Starting at",
-    status: "Published",
-    icon: "code",
-  },
-  {
-    id: 2,
-    title: "UI/UX Design",
-    category: "Design",
-    description:
-      "Intuitive interfaces and user experiences for websites and applications.",
-    price: 15000,
-    pricingType: "Starting at",
-    status: "Published",
-    icon: "design",
-  },
-  {
-    id: 3,
-    title: "Mobile App Development",
-    category: "Development",
-    description:
-      "Cross-platform mobile applications for Android and iOS.",
-    price: 40000,
-    pricingType: "Starting at",
-    status: "Published",
-    icon: "mobile",
-  },
-  {
-    id: 4,
-    title: "SEO Optimization",
-    category: "Marketing",
-    description:
-      "Improve website visibility, technical SEO, and search performance.",
-    price: 10000,
-    pricingType: "Starting at",
-    status: "Draft",
-    icon: "seo",
-  },
-  {
-    id: 5,
-    title: "Cloud Deployment",
-    category: "Cloud & IT",
-    description:
-      "Deployment configuration, hosting setup, and production readiness.",
-    price: 0,
-    pricingType: "Custom",
-    status: "Published",
-    icon: "cloud",
-  },
-  {
-    id: 6,
-    title: "Digital Marketing",
-    category: "Marketing",
-    description:
-      "Digital campaign planning and marketing support for your business.",
-    price: 12000,
-    pricingType: "Fixed",
-    status: "Draft",
-    icon: "marketing",
-  },
-];
+import { getAllServices, deleteServiceFromDb, type Service } from "@/app/lib/db/service";
 
 const iconMap = {
   code: Code2,
@@ -109,18 +29,54 @@ const iconMap = {
   marketing: Megaphone,
 };
 
-const money = (price: number) =>
-  new Intl.NumberFormat("en-NP", {
-    style: "currency",
-    currency: "NPR",
-    maximumFractionDigits: 0,
-  }).format(price);
+const money = (price: number | null) =>
+  price === null
+    ? "Contact us"
+    : new Intl.NumberFormat("en-NP", {
+        style: "currency",
+        currency: "NPR",
+        maximumFractionDigits: 0,
+      }).format(price);
+
+// Toast notification helper
+const Toast = Swal.mixin({
+  toast: true,
+  position: "top-end",
+  showConfirmButton: false,
+  timer: 3000,
+  timerProgressBar: true,
+  didOpen: (toast) => {
+    toast.onmouseenter = Swal.stopTimer;
+    toast.onmouseleave = Swal.resumeTimer;
+  },
+});
 
 export default function ServicesPage() {
-  const [services, setServices] = useState(initialServices);
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [status, setStatus] = useState("All");
+
+  useEffect(() => {
+    loadServices();
+  }, []);
+
+  async function loadServices() {
+    try {
+      setLoading(true);
+      const data = await getAllServices();
+      setServices(data);
+    } catch (error) {
+      console.error("Failed to fetch services:", error);
+      Toast.fire({
+        icon: "error",
+        title: "Failed to load services from database.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const filteredServices = useMemo(
     () =>
@@ -141,9 +97,33 @@ export default function ServicesPage() {
     [services, search, category, status],
   );
 
-  function deleteService(id: number) {
-    if (window.confirm("Are you sure you want to delete this service?")) {
+  async function deleteService(id: string, title: string) {
+    // Delete uses SWAL modal confirmation
+    const result = await Swal.fire({
+      title: "Are you sure?",
+      text: `You are about to delete "${title}". This action cannot be undone!`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#e11d48",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Yes, delete it!",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await deleteServiceFromDb(id);
       setServices((current) => current.filter((service) => service.id !== id));
+      Toast.fire({
+        icon: "success",
+        title: "Service deleted successfully.",
+      });
+    } catch (error) {
+      console.error("Failed to delete service:", error);
+      Toast.fire({
+        icon: "error",
+        title: "Failed to delete service from database.",
+      });
     }
   }
 
@@ -154,6 +134,14 @@ export default function ServicesPage() {
     (service) => service.status === "Draft",
   ).length;
   const categories = new Set(services.map((service) => service.category)).size;
+
+  if (loading) {
+    return (
+      <div className="flex h-96 w-full items-center justify-center bg-gray-50">
+        <Loader2 className="animate-spin text-indigo-600" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -248,6 +236,8 @@ export default function ServicesPage() {
               <option value="Design">Design</option>
               <option value="Marketing">Marketing</option>
               <option value="Cloud & IT">Cloud & IT</option>
+              <option value="Consulting">Consulting</option>
+              <option value="Other">Other</option>
             </select>
 
             <select
@@ -317,9 +307,11 @@ export default function ServicesPage() {
                       type="button"
                       title="Preview service"
                       onClick={() =>
-                        window.alert(
-                          `${service.title}\n\n${service.description}`,
-                        )
+                        Swal.fire({
+                          title: service.title,
+                          text: service.description,
+                          confirmButtonColor: "#4f46e5",
+                        })
                       }
                       className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-indigo-600"
                     >
@@ -337,7 +329,7 @@ export default function ServicesPage() {
                     <button
                       type="button"
                       title="Delete service"
-                      onClick={() => deleteService(service.id)}
+                      onClick={() => deleteService(service.id, service.title)}
                       className="rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
                     >
                       <Trash2 size={16} />

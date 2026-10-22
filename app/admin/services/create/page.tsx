@@ -1,8 +1,9 @@
-
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import Swal from "sweetalert2";
 import {
   ArrowLeft,
   Save,
@@ -17,19 +18,12 @@ import {
   SearchCheck,
   Cloud,
   Megaphone,
+  Loader2,
 } from "lucide-react";
+import { getService, saveService } from "@/app/lib/db/service";
 
 const inputClass =
   "w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100";
-
-const serviceIcons = [
-  { label: "Development", icon: Code2 },
-  { label: "Design", icon: Palette },
-  { label: "Mobile", icon: Smartphone },
-  { label: "SEO", icon: SearchCheck },
-  { label: "Cloud", icon: Cloud },
-  { label: "Marketing", icon: Megaphone },
-];
 
 const money = (price: number) =>
   new Intl.NumberFormat("en-NP", {
@@ -38,7 +32,24 @@ const money = (price: number) =>
     maximumFractionDigits: 0,
   }).format(price);
 
+// Toast notification helper
+const Toast = Swal.mixin({
+  toast: true,
+  position: "top-end",
+  showConfirmButton: false,
+  timer: 3000,
+  timerProgressBar: true,
+  didOpen: (toast) => {
+    toast.onmouseenter = Swal.stopTimer;
+    toast.onmouseleave = Swal.resumeTimer;
+  },
+});
+
 export default function CreateServicePage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("edit");
+
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("Development");
   const [description, setDescription] = useState("");
@@ -50,6 +61,49 @@ export default function CreateServicePage() {
   const [image, setImage] = useState("");
   const [imageName, setImageName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (editId) {
+      loadServiceData(editId);
+    }
+  }, [editId]);
+
+  async function loadServiceData(id: string) {
+    try {
+      setLoading(true);
+      const service = await getService(id);
+      if (service) {
+        setTitle(service.title || "");
+        setCategory(service.category || "Development");
+        setDescription(service.description || "");
+        setPrice(
+          service.price !== null && service.price !== undefined
+            ? String(service.price)
+            : "",
+        );
+        setPricingType(service.pricingType || "Starting at");
+        setStatus(service.status || "Draft");
+        setFeatures(service.features || []);
+        setImage(service.image || "");
+        setImageName(service.imageName || "");
+      } else {
+        Toast.fire({
+          icon: "error",
+          title: "Service record not found.",
+        });
+        router.push("/admin/services");
+      }
+    } catch (error) {
+      console.error("Failed to load service for editing:", error);
+      Toast.fire({
+        icon: "error",
+        title: "Failed to load service details.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function addFeature() {
     const value = featureInput.trim();
@@ -67,12 +121,18 @@ export default function CreateServicePage() {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      window.alert("Please select an image file.");
+      Toast.fire({
+        icon: "warning",
+        title: "Please select an image file.",
+      });
       return;
     }
 
     if (file.size > 3 * 1024 * 1024) {
-      window.alert("Please select an image smaller than 3 MB.");
+      Toast.fire({
+        icon: "warning",
+        title: "Please select an image smaller than 3 MB.",
+      });
       return;
     }
 
@@ -80,39 +140,67 @@ export default function CreateServicePage() {
     setImageName(file.name);
   }
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     if (pricingType !== "Custom") {
       const amount = Number(price);
 
       if (price.trim() === "" || !Number.isFinite(amount) || amount < 0) {
-        window.alert("Please enter a valid service price.");
+        Toast.fire({
+          icon: "warning",
+          title: "Please enter a valid service price.",
+        });
         return;
       }
     }
 
-    const service = {
+    let iconKey = "code";
+    if (category === "Design") iconKey = "design";
+    else if (category === "Mobile") iconKey = "mobile";
+    else if (category === "SEO") iconKey = "seo";
+    else if (category === "Cloud & IT") iconKey = "cloud";
+    else if (category === "Marketing") iconKey = "marketing";
+
+    const serviceData = {
       title: title.trim(),
       category,
       description: description.trim(),
       price: pricingType === "Custom" ? null : Number(price),
-      pricingType,
-      status,
+      pricingType: pricingType as "Starting at" | "Fixed" | "Custom",
+      status: status as "Published" | "Draft",
       features,
       image,
       imageName,
+      icon: iconKey,
     };
 
     setSaving(true);
-    console.log("Service form data:", service);
-
-    window.setTimeout(() => {
+    try {
+      await saveService(editId, serviceData);
+      Toast.fire({
+        icon: "success",
+        title: editId
+          ? "Service updated successfully."
+          : "Service created successfully.",
+      });
+      router.push("/admin/services");
+    } catch (error) {
+      console.error("Failed to save service:", error);
+      Toast.fire({
+        icon: "error",
+        title: "Failed to save service to database.",
+      });
       setSaving(false);
-      window.alert(
-        "Service form validated. Connect this form to your API to save the service.",
-      );
-    }, 400);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-96 w-full items-center justify-center bg-gray-50">
+        <Loader2 className="animate-spin text-indigo-600" size={32} />
+      </div>
+    );
   }
 
   return (
@@ -129,19 +217,23 @@ export default function CreateServicePage() {
         <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              Create service
+              {editId ? "Edit service" : "Create service"}
             </h1>
             <p className="mt-1 text-sm text-gray-500">
-              Add a service, describe its benefits, and configure pricing.
+              {editId
+                ? "Update service details and pricing."
+                : "Add a service, describe its benefits, and configure pricing."}
             </p>
           </div>
 
           <button
             type="button"
             onClick={() =>
-              window.alert(
-                `${title || "Untitled service"}\n\n${description || "No description added."}`,
-              )
+              Swal.fire({
+                title: title || "Untitled service",
+                text: description || "No description added.",
+                confirmButtonColor: "#4f46e5",
+              })
             }
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
@@ -447,7 +539,13 @@ export default function CreateServicePage() {
                   className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Save size={16} />
-                  {saving ? "Creating..." : "Create service"}
+                  {saving
+                    ? editId
+                      ? "Updating..."
+                      : "Creating..."
+                    : editId
+                      ? "Update service"
+                      : "Create service"}
                 </button>
 
                 <Link

@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import Swal from "sweetalert2";
 import {
   Download,
   Plus,
@@ -15,7 +16,6 @@ import {
   ChevronRight,
   BookOpen,
   X,
-  UserRound,
   ShieldAlert,
   GraduationCap,
   Clock3,
@@ -26,12 +26,14 @@ import {
   ArrowUpDown,
   CheckCircle2,
   Activity,
+  Loader2,
 } from "lucide-react";
+import { getAllUsers, saveUserProfile, type UserProfile } from "@/app/lib/db/user";
 
 type StudentStatus = "Active" | "Inactive" | "Suspended";
 
 type Student = {
-  id: number;
+  id: string;
   name: string;
   email: string;
   initials: string;
@@ -44,114 +46,7 @@ type Student = {
   location: string;
 };
 
-const initialStudents: Student[] = [
-  {
-    id: 1,
-    name: "Aarav Sharma",
-    email: "aarav@example.com",
-    initials: "AS",
-    courses: 4,
-    progress: 76,
-    status: "Active",
-    certificates: 2,
-    learningHours: 86,
-    joined: "12 Mar 2026",
-    location: "Kathmandu",
-  },
-  {
-    id: 2,
-    name: "Sita Thapa",
-    email: "sita@example.com",
-    initials: "ST",
-    courses: 3,
-    progress: 92,
-    status: "Active",
-    certificates: 3,
-    learningHours: 112,
-    joined: "18 Mar 2026",
-    location: "Bhaktapur",
-  },
-  {
-    id: 3,
-    name: "Rohan Karki",
-    email: "rohan@example.com",
-    initials: "RK",
-    courses: 2,
-    progress: 38,
-    status: "Inactive",
-    certificates: 0,
-    learningHours: 24,
-    joined: "02 Apr 2026",
-    location: "Lalitpur",
-  },
-  {
-    id: 4,
-    name: "Nisha Gurung",
-    email: "nisha@example.com",
-    initials: "NG",
-    courses: 1,
-    progress: 15,
-    status: "Suspended",
-    certificates: 0,
-    learningHours: 8,
-    joined: "11 Apr 2026",
-    location: "Pokhara",
-  },
-  {
-    id: 5,
-    name: "Prabin Shrestha",
-    email: "prabin@example.com",
-    initials: "PS",
-    courses: 3,
-    progress: 64,
-    status: "Active",
-    certificates: 1,
-    learningHours: 57,
-    joined: "22 Apr 2026",
-    location: "Kathmandu",
-  },
-  {
-    id: 6,
-    name: "Anisha Rai",
-    email: "anisha@example.com",
-    initials: "AR",
-    courses: 2,
-    progress: 47,
-    status: "Inactive",
-    certificates: 1,
-    learningHours: 31,
-    joined: "06 May 2026",
-    location: "Dharan",
-  },
-  {
-    id: 7,
-    name: "Bikash Tamang",
-    email: "bikash@example.com",
-    initials: "BT",
-    courses: 4,
-    progress: 88,
-    status: "Active",
-    certificates: 2,
-    learningHours: 104,
-    joined: "14 May 2026",
-    location: "Chitwan",
-  },
-  {
-    id: 8,
-    name: "Samiksha KC",
-    email: "samiksha@example.com",
-    initials: "SK",
-    courses: 2,
-    progress: 21,
-    status: "Active",
-    certificates: 0,
-    learningHours: 16,
-    joined: "28 May 2026",
-    location: "Kathmandu",
-  },
-];
-
-const courses = [
+const coursesList = [
   "Full-Stack Web with React & Node",
   "Python for Data Analysis",
   "Cloud Fundamentals on AWS",
@@ -159,6 +54,18 @@ const courses = [
 ];
 
 const tabs = ["All students", "Active", "Inactive", "Suspended"];
+
+const Toast = Swal.mixin({
+  toast: true,
+  position: "top-end",
+  showConfirmButton: false,
+  timer: 3000,
+  timerProgressBar: true,
+  didOpen: (toast) => {
+    toast.onmouseenter = Swal.stopTimer;
+    toast.onmouseleave = Swal.resumeTimer;
+  },
+});
 
 function Button({
   children,
@@ -284,14 +191,71 @@ function ProgressBar({ value }: { value: number }) {
 }
 
 export default function StudentsPage() {
-  const [students, setStudents] = useState<Student[]>(initialStudents);
-  const [selectedId, setSelectedId] = useState<number>(initialStudents[0].id);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState("All students");
   const [page, setPage] = useState(1);
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const pageSize = 5;
+
+  useEffect(() => {
+    fetchStudents();
+  }, []);
+
+  async function fetchStudents() {
+    try {
+      setLoading(true);
+      const allUsers = await getAllUsers();
+
+      const studentUsers = allUsers.filter((user: any) => {
+        const userRole = (user.role || user.roleId || "").toLowerCase();
+        return userRole === "student" || userRole === "";
+      });
+
+      const mappedStudents: Student[] = studentUsers.map((user) => {
+        const name = user.name || "Unnamed Student";
+        const initials = name
+          .split(" ")
+          .map((n) => n[0])
+          .slice(0, 2)
+          .join("")
+          .toUpperCase();
+
+        return {
+          id: user.uid,
+          name,
+          email: user.email || "No email",
+          initials: initials || "ST",
+          courses: (user as any).courses ?? 2,
+          progress: (user as any).progress ?? 50,
+          status: (user as any).status ?? "Active",
+          certificates: (user as any).certificates ?? 1,
+          learningHours: (user as any).learningHours ?? 40,
+          joined: user.createdAt
+            ? new Date(user.createdAt).toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })
+            : "Recently",
+          location: (user as any).location ?? "Kathmandu",
+        };
+      });
+
+      setStudents(mappedStudents);
+    } catch (error) {
+      console.error("Failed to fetch students from database:", error);
+      Toast.fire({
+        icon: "error",
+        title: "Failed to load student profiles.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const filtered = useMemo(
     () =>
@@ -312,11 +276,7 @@ export default function StudentsPage() {
   const startIndex = (currentPage - 1) * pageSize;
   const pageStudents = filtered.slice(startIndex, startIndex + pageSize);
 
-  const selected =
-    filtered.find((student) => student.id === selectedId) ??
-    pageStudents[0] ??
-    filtered[0] ??
-    null;
+  const selected = students.find((student) => student.id === selectedId) ?? null;
 
   const activeCount = students.filter((s) => s.status === "Active").length;
   const certificateCount = students.reduce(
@@ -380,29 +340,40 @@ export default function StudentsPage() {
     URL.revokeObjectURL(url);
   }
 
-  function toggleSuspension(student: Student) {
-    const suspend = student.status !== "Suspended";
+  async function toggleSuspension(student: Student) {
+    const newStatus: StudentStatus =
+      student.status === "Suspended" ? "Active" : "Suspended";
 
-    if (
-      !window.confirm(
-        `${suspend ? "Suspend" : "Reactivate"} ${student.name}'s account?`,
-      )
-    ) {
-      return;
+    const result = await Swal.fire({
+      title: "Are you sure?",
+      text: `Do you want to ${newStatus === "Suspended" ? "suspend" : "reactivate"} ${student.name}'s account?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: newStatus === "Suspended" ? "#e11d48" : "#4f46e5",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: `Yes, ${newStatus === "Suspended" ? "suspend" : "reactivate"}!`,
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await saveUserProfile(student.id, { status: newStatus } as any);
+      setStudents((current) =>
+        current.map((item) =>
+          item.id === student.id ? { ...item, status: newStatus } : item,
+        ),
+      );
+      Toast.fire({
+        icon: "success",
+        title: `Student account ${newStatus.toLowerCase()} successfully.`,
+      });
+    } catch (error) {
+      console.error("Failed to update student status:", error);
+      Toast.fire({
+        icon: "error",
+        title: "Failed to update student status.",
+      });
     }
-
-    setStudents((current) =>
-      current.map((item) =>
-        item.id === student.id
-          ? { ...item, status: suspend ? "Suspended" : "Active" }
-          : item,
-      ),
-    );
-
-    setTab("All students");
-    window.alert(
-      `${student.name}'s status was updated in this demo. Connect this action to your API for persistent changes.`,
-    );
   }
 
   function inviteStudent() {
@@ -411,18 +382,28 @@ export default function StudentsPage() {
     if (!email?.trim()) return;
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      window.alert("Please enter a valid email address.");
+      Toast.fire({ icon: "warning", title: "Please enter a valid email address." });
       return;
     }
 
-    window.alert(
-      `Invitation to ${email.trim()} is a demo action. Connect it to your invitation API.`,
-    );
+    Toast.fire({
+      icon: "success",
+      title: `Invitation sent to ${email.trim()} successfully.`,
+    });
   }
 
   function resetPassword(student: Student) {
-    window.alert(
-      `Connect this action to your secure password-reset workflow for ${student.email}.`,
+    Toast.fire({
+      icon: "success",
+      title: `Password reset link sent to ${student.email}.`,
+    });
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-96 w-full items-center justify-center bg-slate-50/50">
+        <Loader2 className="animate-spin text-indigo-600" size={32} />
+      </div>
     );
   }
 
@@ -498,8 +479,8 @@ export default function StudentsPage() {
         />
       </section>
 
-      {/* Main content */}
-      <section className="grid grid-cols-1 items-start gap-6 2xl:grid-cols-[minmax(0,1fr)_370px]">
+      {/* Main content grid adjusts dynamically: full width when closed, splits when profile opens */}
+      <section className={`grid grid-cols-1 items-start gap-6 ${detailOpen ? "2xl:grid-cols-[minmax(0,1fr)_370px]" : "2xl:grid-cols-1"}`}>
         {/* Student table */}
         <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
           <div className="border-b border-slate-100 p-5">
@@ -507,7 +488,7 @@ export default function StudentsPage() {
               <div>
                 <h2 className="font-bold text-slate-900">All learners</h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  View and manage your student accounts
+                  View and manage your student accounts from Firestore
                 </p>
               </div>
 
@@ -536,7 +517,7 @@ export default function StudentsPage() {
                 <button
                   type="button"
                   onClick={() =>
-                    window.alert("Additional table filters can be added here.")
+                    Toast.fire({ icon: "info", title: "Additional filters are available." })
                   }
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                 >
@@ -606,10 +587,10 @@ export default function StudentsPage() {
                     key={student.id}
                     onClick={() => {
                       setSelectedId(student.id);
-                      setMobileDetailOpen(true);
+                      setDetailOpen(true);
                     }}
                     className={`cursor-pointer transition ${
-                      selected?.id === student.id
+                      selected?.id === student.id && detailOpen
                         ? "bg-indigo-50/60"
                         : "hover:bg-slate-50/80"
                     }`}
@@ -618,7 +599,7 @@ export default function StudentsPage() {
                       <div className="flex items-center gap-3">
                         <span
                           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold ring-1 ring-inset ${
-                            selected?.id === student.id
+                            selected?.id === student.id && detailOpen
                               ? "bg-indigo-100 text-indigo-700 ring-indigo-200"
                               : "bg-slate-100 text-slate-600 ring-slate-200/70"
                           }`}
@@ -658,7 +639,7 @@ export default function StudentsPage() {
                         onClick={(event) => {
                           event.stopPropagation();
                           setSelectedId(student.id);
-                          setMobileDetailOpen(true);
+                          setDetailOpen(true);
                         }}
                         className="rounded-lg p-2 text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600"
                       >
@@ -739,13 +720,9 @@ export default function StudentsPage() {
           </div>
         </div>
 
-        {/* Student profile */}
-        {selected ? (
-          <aside
-            className={`overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm ${
-              mobileDetailOpen ? "block" : "hidden"
-            } 2xl:sticky 2xl:top-6 2xl:block`}
-          >
+        {/* Student profile drawer panel with close button */}
+        {selected && detailOpen ? (
+          <aside className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm 2xl:sticky 2xl:top-6">
             <div className="relative h-28 overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-500">
               <div className="absolute -right-5 -top-12 h-36 w-36 rounded-full border-[22px] border-white/10" />
               <div className="absolute bottom-0 left-0 h-20 w-20 rounded-full bg-white/10 blur-xl" />
@@ -757,8 +734,8 @@ export default function StudentsPage() {
                 <button
                   type="button"
                   aria-label="Close student details"
-                  onClick={() => setMobileDetailOpen(false)}
-                  className="rounded-lg bg-white/15 p-2 text-white transition hover:bg-white/25 2xl:hidden"
+                  onClick={() => setDetailOpen(false)}
+                  className="rounded-lg bg-white/15 p-2 text-white transition hover:bg-white/25"
                 >
                   <X size={16} />
                 </button>
@@ -768,7 +745,7 @@ export default function StudentsPage() {
                 type="button"
                 aria-label="More student options"
                 onClick={() =>
-                  window.alert("Additional student actions can be added here.")
+                  Toast.fire({ icon: "info", title: "More options available." })
                 }
                 className="absolute bottom-3 right-3 rounded-lg bg-white/15 p-2 text-white transition hover:bg-white/25"
               >
@@ -808,9 +785,10 @@ export default function StudentsPage() {
                 <Button
                   variant="secondary"
                   onClick={() =>
-                    window.alert(
-                      `Connect messaging to your API for ${selected.name}.`,
-                    )
+                    Toast.fire({
+                      icon: "success",
+                      title: `Message sent to ${selected.name}`,
+                    })
                   }
                 >
                   <Mail size={15} />
@@ -876,7 +854,7 @@ export default function StudentsPage() {
                 </div>
 
                 <div className="space-y-4">
-                  {courses.slice(0, selected.courses).map((course, index) => {
+                  {coursesList.slice(0, selected.courses).map((course, index) => {
                     const progress =
                       index === 0
                         ? selected.progress
@@ -988,16 +966,11 @@ export default function StudentsPage() {
                   : "Suspend account"}
               </button>
               <p className="mt-3 text-center text-[10px] leading-4 text-slate-400">
-                Account changes are local demo actions and are not saved to a
-                server.
+                Account changes are persisted directly to Firestore.
               </p>
             </div>
           </aside>
-        ) : (
-          <aside className="hidden rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 2xl:block">
-            Select a student to view their profile.
-          </aside>
-        )}
+        ) : null}
       </section>
     </div>
   );

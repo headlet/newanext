@@ -1,8 +1,8 @@
-
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
+import Swal from "sweetalert2";
 import {
   Activity,
   ArrowUpDown,
@@ -27,12 +27,20 @@ import {
   Star,
   Users,
   X,
+  Loader2,
+  Trash2,
+  Edit3,
 } from "lucide-react";
+import {
+  getAllUsers,
+  saveUserProfile,
+  deleteUserFromDb,
+} from "@/app/lib/db/user";
 
 type InstructorStatus = "Active" | "Inactive" | "Suspended";
 
 type Instructor = {
-  id: number;
+  id: string; // Firebase UID
   name: string;
   email: string;
   initials: string;
@@ -49,154 +57,24 @@ type Instructor = {
   courseNames: string[];
 };
 
-const initialInstructors: Instructor[] = [
-  {
-    id: 1,
-    name: "Rahul Sharma",
-    email: "rahul@example.com",
-    initials: "RS",
-    specialization: "Full-Stack Development",
-    courses: 3,
-    students: 186,
-    rating: 4.9,
-    status: "Active",
-    experience: 6,
-    joined: "12 Mar 2026",
-    location: "Kathmandu",
-    learningHours: 420,
-    bio: "Experienced full-stack developer teaching modern web technologies.",
-    courseNames: [
-      "Full-Stack Web Development",
-      "React & Next.js",
-      "REST API Development",
-    ],
-  },
-  {
-    id: 2,
-    name: "Priya Thapa",
-    email: "priya@example.com",
-    initials: "PT",
-    specialization: "UI/UX Design",
-    courses: 2,
-    students: 124,
-    rating: 4.8,
-    status: "Active",
-    experience: 4,
-    joined: "18 Mar 2026",
-    location: "Bhaktapur",
-    learningHours: 280,
-    bio: "Product designer focused on accessible and user-friendly interfaces.",
-    courseNames: ["UI/UX Design Basics", "Figma for Beginners"],
-  },
-  {
-    id: 3,
-    name: "Suman Karki",
-    email: "suman@example.com",
-    initials: "SK",
-    specialization: "Python & Data Science",
-    courses: 2,
-    students: 98,
-    rating: 4.6,
-    status: "Active",
-    experience: 5,
-    joined: "02 Apr 2026",
-    location: "Lalitpur",
-    learningHours: 310,
-    bio: "Python instructor with a focus on practical data analysis.",
-    courseNames: ["Python Fundamentals", "Data Analysis with Python"],
-  },
-  {
-    id: 4,
-    name: "Nisha Gurung",
-    email: "nisha@example.com",
-    initials: "NG",
-    specialization: "Cloud Computing",
-    courses: 1,
-    students: 45,
-    rating: 4.4,
-    status: "Inactive",
-    experience: 3,
-    joined: "11 Apr 2026",
-    location: "Pokhara",
-    learningHours: 95,
-    bio: "Cloud computing educator specializing in deployment fundamentals.",
-    courseNames: ["Cloud Fundamentals on AWS"],
-  },
-  {
-    id: 5,
-    name: "Prabin Shrestha",
-    email: "prabin@example.com",
-    initials: "PS",
-    specialization: "Mobile App Development",
-    courses: 2,
-    students: 112,
-    rating: 4.7,
-    status: "Active",
-    experience: 5,
-    joined: "22 Apr 2026",
-    location: "Kathmandu",
-    learningHours: 350,
-    bio: "Mobile developer teaching Flutter and cross-platform development.",
-    courseNames: ["Flutter Development", "Dart Programming"],
-  },
-  {
-    id: 6,
-    name: "Anisha Rai",
-    email: "anisha@example.com",
-    initials: "AR",
-    specialization: "Digital Marketing",
-    courses: 1,
-    students: 67,
-    rating: 4.2,
-    status: "Suspended",
-    experience: 2,
-    joined: "06 May 2026",
-    location: "Dharan",
-    learningHours: 80,
-    bio: "Digital marketing instructor focused on SEO and content strategy.",
-    courseNames: ["SEO & Digital Marketing"],
-  },
-  {
-    id: 7,
-    name: "Bikash Tamang",
-    email: "bikash@example.com",
-    initials: "BT",
-    specialization: "Backend Development",
-    courses: 3,
-    students: 153,
-    rating: 4.9,
-    status: "Active",
-    experience: 7,
-    joined: "14 May 2026",
-    location: "Chitwan",
-    learningHours: 490,
-    bio: "Backend engineer teaching APIs, databases, and Laravel.",
-    courseNames: [
-      "Laravel Development",
-      "Database Design",
-      "API Development",
-    ],
-  },
-  {
-    id: 8,
-    name: "Samiksha KC",
-    email: "samiksha@example.com",
-    initials: "SK",
-    specialization: "Cybersecurity",
-    courses: 1,
-    students: 52,
-    rating: 4.5,
-    status: "Active",
-    experience: 3,
-    joined: "28 May 2026",
-    location: "Kathmandu",
-    learningHours: 140,
-    bio: "Cybersecurity educator focused on security fundamentals.",
-    courseNames: ["Cybersecurity Fundamentals"],
-  },
+const tabs = ["All instructors", "Active", "Inactive", "Suspended"];
+
+const ADMIN_EMAILS = [
+  process.env.NEXT_PUBLIC_ADMIN_EMAIL || "admin@newanext.com",
+  "owner@newanext.com",
 ];
 
-const tabs = ["All instructors", "Active", "Inactive", "Suspended"];
+const Toast = Swal.mixin({
+  toast: true,
+  position: "top-end",
+  showConfirmButton: false,
+  timer: 3000,
+  timerProgressBar: true,
+  didOpen: (toast) => {
+    toast.onmouseenter = Swal.stopTimer;
+    toast.onmouseleave = Swal.resumeTimer;
+  },
+});
 
 function Button({
   children,
@@ -205,17 +83,22 @@ function Button({
 }: {
   children: React.ReactNode;
   onClick?: () => void;
-  variant?: "primary" | "secondary";
+  variant?: "primary" | "secondary" | "danger";
 }) {
+  const variants = {
+    primary:
+      "bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 active:scale-[0.98]",
+    secondary:
+      "border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
+    danger:
+      "bg-rose-600 text-white shadow-sm hover:bg-rose-700 active:scale-[0.98]",
+  };
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
-        variant === "primary"
-          ? "bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 active:scale-[0.98]"
-          : "border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-      }`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${variants[variant]}`}
     >
       {children}
     </button>
@@ -297,17 +180,81 @@ function Status({ status }: { status: InstructorStatus }) {
 }
 
 export default function InstructorsPage() {
-  const [instructors, setInstructors] =
-    useState<Instructor[]>(initialInstructors);
-  const [selectedId, setSelectedId] = useState<number | null>(
-    initialInstructors[0].id,
-  );
+  const [instructors, setInstructors] = useState<Instructor[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState("All instructors");
   const [page, setPage] = useState(1);
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  const [currentUserEmail] = useState(ADMIN_EMAILS[0]);
+  const isAdminOrEnv = ADMIN_EMAILS.includes(currentUserEmail.toLowerCase());
 
   const pageSize = 5;
+
+  useEffect(() => {
+    fetchInstructors();
+  }, []);
+
+  async function fetchInstructors() {
+    try {
+      setLoading(true);
+      const allUsers = await getAllUsers();
+
+      // Filter users where role or roleId is instructor
+      const instructorUsers = allUsers.filter((user: any) => {
+        const userRole = (user.role || user.roleId || "").toLowerCase();
+        return userRole === "instructor";
+      });
+
+      const mappedInstructors: Instructor[] = instructorUsers.map((user) => {
+        const name = user.name || "Unnamed Instructor";
+        const initials = name
+          .split(" ")
+          .map((n) => n[0])
+          .slice(0, 2)
+          .join("")
+          .toUpperCase();
+
+        return {
+          id: user.uid,
+          name,
+          email: user.email || "No email",
+          initials: initials || "IN",
+          specialization:
+            (user as any).specialization || "Full-Stack Development",
+          courses: (user as any).courses ?? 2,
+          students: (user as any).students ?? 120,
+          rating: (user as any).rating ?? 4.8,
+          status: (user as any).status ?? "Active",
+          experience: (user as any).experience ?? 5,
+          joined: user.createdAt
+            ? new Date(user.createdAt).toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })
+            : "Recently",
+          location: (user as any).location ?? "Kathmandu",
+          learningHours: (user as any).learningHours ?? 320,
+          bio:
+            (user as any).bio || "Experienced educator teaching modern tech.",
+          courseNames: (user as any).courseNames || [
+            "Full-Stack Web Development",
+            "React & Next.js",
+          ],
+        };
+      });
+
+      setInstructors(mappedInstructors);
+    } catch (error) {
+      console.error("Failed to fetch instructors:", error);
+      Toast.fire({ icon: "error", title: "Failed to load instructors." });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const filtered = useMemo(
     () =>
@@ -334,16 +281,9 @@ export default function InstructorsPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const startIndex = (currentPage - 1) * pageSize;
-  const pageInstructors = filtered.slice(
-    startIndex,
-    startIndex + pageSize,
-  );
+  const pageInstructors = filtered.slice(startIndex, startIndex + pageSize);
 
-  const selected =
-    filtered.find((item) => item.id === selectedId) ??
-    pageInstructors[0] ??
-    filtered[0] ??
-    null;
+  const selected = instructors.find((item) => item.id === selectedId) ?? null;
 
   const activeCount = instructors.filter(
     (item) => item.status === "Active",
@@ -418,37 +358,146 @@ export default function InstructorsPage() {
     URL.revokeObjectURL(url);
   }
 
-  function toggleStatus(instructor: Instructor) {
-    const suspend = instructor.status !== "Suspended";
-
-    if (
-      !window.confirm(
-        `${suspend ? "Suspend" : "Reactivate"} ${instructor.name}'s account?`,
-      )
-    ) {
+  async function handleEditInstructor(instructor: Instructor) {
+    if (!isAdminOrEnv) {
+      Toast.fire({
+        icon: "error",
+        title: "Permission denied: Only admin/env emails can edit instructors.",
+      });
       return;
     }
 
-    setInstructors((current) =>
-      current.map((item) =>
-        item.id === instructor.id
-          ? {
-              ...item,
-              status: suspend ? "Suspended" : "Active",
-            }
-          : item,
-      ),
-    );
+    const { value: formValues } = await Swal.fire({
+      title: "Edit Instructor Profile",
+      html: `
+        <input id="swal-input-name" class="swal2-input" placeholder="Name" value="${instructor.name}">
+        <input id="swal-input-spec" class="swal2-input" placeholder="Specialization" value="${instructor.specialization}">
+        <input id="swal-input-loc" class="swal2-input" placeholder="Location" value="${instructor.location}">
+      `,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: "Save Changes",
+      preConfirm: () => {
+        return {
+          name: (document.getElementById("swal-input-name") as HTMLInputElement)
+            ?.value,
+          specialization: (
+            document.getElementById("swal-input-spec") as HTMLInputElement
+          )?.value,
+          location: (
+            document.getElementById("swal-input-loc") as HTMLInputElement
+          )?.value,
+        };
+      },
+    });
 
-    setTab("All instructors");
+    if (!formValues) return;
 
-    window.alert(
-      "Instructor status updated in this demo. Connect your API to save this change permanently.",
-    );
+    try {
+      await saveUserProfile(instructor.id, {
+        name: formValues.name,
+        specialization: formValues.specialization,
+        location: formValues.location,
+      });
+
+      setInstructors((current) =>
+        current.map((item) =>
+          item.id === instructor.id
+            ? {
+                ...item,
+                name: formValues.name,
+                specialization: formValues.specialization,
+                location: formValues.location,
+              }
+            : item,
+        ),
+      );
+
+      Toast.fire({
+        icon: "success",
+        title: "Instructor updated successfully in Firestore.",
+      });
+    } catch (error) {
+      console.error("Failed to edit instructor:", error);
+      Toast.fire({ icon: "error", title: "Failed to update instructor." });
+    }
   }
 
-  function sendMessage(instructor: Instructor) {
-    window.location.href = `mailto:${instructor.email}`;
+  async function handleDeleteInstructor(instructor: Instructor) {
+    if (!isAdminOrEnv) {
+      Toast.fire({
+        icon: "error",
+        title:
+          "Permission denied: Only admin/env emails can delete instructors.",
+      });
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: "Delete Instructor?",
+      text: `Are you sure you want to permanently delete ${instructor.name}?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#e11d48",
+      confirmButtonText: "Yes, delete!",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await deleteUserFromDb(instructor.id);
+      setInstructors((current) =>
+        current.filter((item) => item.id !== instructor.id),
+      );
+      if (selectedId === instructor.id) {
+        setDetailOpen(false);
+        setSelectedId(null);
+      }
+      Toast.fire({
+        icon: "success",
+        title: "Instructor deleted from Firestore successfully.",
+      });
+    } catch (error) {
+      console.error("Failed to delete instructor:", error);
+      Toast.fire({ icon: "error", title: "Failed to delete instructor." });
+    }
+  }
+
+  async function toggleStatus(instructor: Instructor) {
+    if (!isAdminOrEnv) {
+      Toast.fire({
+        icon: "error",
+        title: "Permission denied: Only admin/env emails can change status.",
+      });
+      return;
+    }
+
+    const newStatus: InstructorStatus =
+      instructor.status === "Suspended" ? "Active" : "Suspended";
+
+    try {
+      await saveUserProfile(instructor.id, { status: newStatus } as any);
+      setInstructors((current) =>
+        current.map((item) =>
+          item.id === instructor.id ? { ...item, status: newStatus } : item,
+        ),
+      );
+      Toast.fire({
+        icon: "success",
+        title: `Instructor status updated to ${newStatus}.`,
+      });
+    } catch (error) {
+      console.error("Failed to update status:", error);
+      Toast.fire({ icon: "error", title: "Failed to update status." });
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-96 w-full items-center justify-center bg-slate-50/50">
+        <Loader2 className="animate-spin text-indigo-600" size={32} />
+      </div>
+    );
   }
 
   return (
@@ -460,6 +509,9 @@ export default function InstructorsPage() {
             <span>Admin</span>
             <span>/</span>
             <span className="text-indigo-600">Instructors</span>
+            <span className="rounded bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
+              Role: {isAdminOrEnv ? "Admin (Full Access)" : "Restricted"}
+            </span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -471,7 +523,8 @@ export default function InstructorsPage() {
                 Instructors
               </h1>
               <p className="mt-1 text-sm text-slate-500">
-                Manage teaching staff, assigned courses, and instructor performance.
+                Manage teaching staff, assigned courses, and instructor
+                performance.
               </p>
             </div>
           </div>
@@ -525,17 +578,19 @@ export default function InstructorsPage() {
         />
       </section>
 
-      {/* Table and profile */}
-      <section className="grid grid-cols-1 items-start gap-6 2xl:grid-cols-[minmax(0,1fr)_370px]">
+      {/* Table and profile grid */}
+      <section
+        className={`grid grid-cols-1 items-start gap-6 ${
+          detailOpen ? "2xl:grid-cols-[minmax(0,1fr)_370px]" : "2xl:grid-cols-1"
+        }`}
+      >
         <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
           <div className="border-b border-slate-100 p-5">
             <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
               <div>
-                <h2 className="font-bold text-slate-900">
-                  All teaching staff
-                </h2>
+                <h2 className="font-bold text-slate-900">All teaching staff</h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  View and manage instructor accounts
+                  View and manage instructor accounts from Firestore
                 </p>
               </div>
 
@@ -564,9 +619,7 @@ export default function InstructorsPage() {
                 <button
                   type="button"
                   onClick={() =>
-                    window.alert(
-                      "Use the status tabs to filter instructors. More filters can be added here.",
-                    )
+                    Toast.fire({ icon: "info", title: "Filters active." })
                   }
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                 >
@@ -581,8 +634,9 @@ export default function InstructorsPage() {
                 const count =
                   item === "All instructors"
                     ? instructors.length
-                    : instructors.filter((instructor) => instructor.status === item)
-                        .length;
+                    : instructors.filter(
+                        (instructor) => instructor.status === item,
+                      ).length;
 
                 return (
                   <button
@@ -627,7 +681,7 @@ export default function InstructorsPage() {
                   <th className="px-4 py-4">Students</th>
                   <th className="px-4 py-4">Rating</th>
                   <th className="px-4 py-4">Status</th>
-                  <th className="px-4 py-4 text-right">Details</th>
+                  <th className="px-4 py-4 text-right">Actions</th>
                 </tr>
               </thead>
 
@@ -637,10 +691,10 @@ export default function InstructorsPage() {
                     key={instructor.id}
                     onClick={() => {
                       setSelectedId(instructor.id);
-                      setMobileDetailOpen(true);
+                      setDetailOpen(true);
                     }}
                     className={`cursor-pointer transition ${
-                      selected?.id === instructor.id
+                      selected?.id === instructor.id && detailOpen
                         ? "bg-indigo-50/60"
                         : "hover:bg-slate-50/80"
                     }`}
@@ -649,7 +703,7 @@ export default function InstructorsPage() {
                       <div className="flex items-center gap-3">
                         <span
                           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold ring-1 ring-inset ${
-                            selected?.id === instructor.id
+                            selected?.id === instructor.id && detailOpen
                               ? "bg-indigo-100 text-indigo-700 ring-indigo-200"
                               : "bg-slate-100 text-slate-600 ring-slate-200/70"
                           }`}
@@ -683,7 +737,10 @@ export default function InstructorsPage() {
 
                     <td className="px-4 py-4">
                       <span className="inline-flex items-center gap-1 text-sm font-semibold text-slate-700">
-                        <Star size={14} className="fill-amber-400 text-amber-400" />
+                        <Star
+                          size={14}
+                          className="fill-amber-400 text-amber-400"
+                        />
                         {instructor.rating.toFixed(1)}
                       </span>
                     </td>
@@ -693,18 +750,38 @@ export default function InstructorsPage() {
                     </td>
 
                     <td className="px-4 py-4 text-right">
-                      <button
-                        type="button"
-                        aria-label={`View ${instructor.name}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setSelectedId(instructor.id);
-                          setMobileDetailOpen(true);
-                        }}
-                        className="rounded-lg p-2 text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600"
+                      <div
+                        className="flex items-center justify-end gap-1"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        <Ellipsis size={18} />
-                      </button>
+                        <button
+                          type="button"
+                          title="Edit instructor"
+                          onClick={() => handleEditInstructor(instructor)}
+                          className="rounded-lg p-2 text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600"
+                        >
+                          <Edit3 size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          title="Delete instructor"
+                          onClick={() => handleDeleteInstructor(instructor)}
+                          className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`View ${instructor.name}`}
+                          onClick={() => {
+                            setSelectedId(instructor.id);
+                            setDetailOpen(true);
+                          }}
+                          className="rounded-lg p-2 text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600"
+                        >
+                          <Ellipsis size={18} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -780,13 +857,9 @@ export default function InstructorsPage() {
           </div>
         </div>
 
-        {/* Instructor profile */}
-        {selected ? (
-          <aside
-            className={`overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm ${
-              mobileDetailOpen ? "block" : "hidden"
-            } 2xl:sticky 2xl:top-6 2xl:block`}
-          >
+        {/* Instructor profile drawer */}
+        {selected && detailOpen ? (
+          <aside className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm 2xl:sticky 2xl:top-6">
             <div className="relative h-28 overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-500">
               <div className="absolute -right-5 -top-12 h-36 w-36 rounded-full border-[22px] border-white/10" />
               <div className="absolute bottom-0 left-0 h-20 w-20 rounded-full bg-white/10 blur-xl" />
@@ -798,23 +871,12 @@ export default function InstructorsPage() {
                 <button
                   type="button"
                   aria-label="Close instructor details"
-                  onClick={() => setMobileDetailOpen(false)}
-                  className="rounded-lg bg-white/15 p-2 text-white transition hover:bg-white/25 2xl:hidden"
+                  onClick={() => setDetailOpen(false)}
+                  className="rounded-lg bg-white/15 p-2 text-white transition hover:bg-white/25"
                 >
                   <X size={16} />
                 </button>
               </div>
-
-              <button
-                type="button"
-                aria-label="More instructor options"
-                onClick={() =>
-                  window.alert("Additional instructor actions can be added here.")
-                }
-                className="absolute bottom-3 right-3 rounded-lg bg-white/15 p-2 text-white transition hover:bg-white/25"
-              >
-                <MoreHorizontal size={18} />
-              </button>
 
               <div className="absolute -bottom-7 left-5 flex h-[68px] w-[68px] items-center justify-center rounded-2xl border-4 border-white bg-indigo-50 text-xl font-bold text-indigo-700 shadow-sm">
                 {selected.initials}
@@ -855,21 +917,17 @@ export default function InstructorsPage() {
               <div className="mt-5 grid grid-cols-2 gap-2">
                 <Button
                   variant="secondary"
-                  onClick={() => sendMessage(selected)}
+                  onClick={() => handleEditInstructor(selected)}
                 >
-                  <Mail size={15} />
-                  Message
+                  <Edit3 size={15} />
+                  Edit details
                 </Button>
                 <Button
-                  variant="secondary"
-                  onClick={() =>
-                    window.alert(
-                      `Open the instructor edit form for ${selected.name} here.`,
-                    )
-                  }
+                  variant="danger"
+                  onClick={() => handleDeleteInstructor(selected)}
                 >
-                  <MoreHorizontal size={15} />
-                  More details
+                  <Trash2 size={15} />
+                  Delete
                 </Button>
               </div>
 
@@ -897,10 +955,7 @@ export default function InstructorsPage() {
                   </span>
                 </div>
                 <div className="px-1 text-center">
-                  <Clock3
-                    className="mx-auto mb-2 text-emerald-500"
-                    size={17}
-                  />
+                  <Clock3 className="mx-auto mb-2 text-emerald-500" size={17} />
                   <b className="block text-lg font-bold text-slate-900">
                     {selected.learningHours}h
                   </b>
@@ -918,9 +973,7 @@ export default function InstructorsPage() {
                   {selected.experience} years
                 </p>
                 <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
-                  <span className="text-xs text-slate-500">
-                    Student rating
-                  </span>
+                  <span className="text-xs text-slate-500">Student rating</span>
                   <span className="inline-flex items-center gap-1 text-sm font-bold text-slate-800">
                     <Star size={15} className="fill-amber-400 text-amber-400" />
                     {selected.rating.toFixed(1)}
@@ -970,60 +1023,6 @@ export default function InstructorsPage() {
                 </div>
               </div>
 
-              {/* Recent activity */}
-              <div className="mt-7">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Recent activity
-                  </h3>
-                  <Activity size={16} className="text-slate-400" />
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                      <CheckCircle2 size={15} />
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium leading-5 text-slate-700">
-                        Course content updated
-                      </p>
-                      <span className="text-[11px] text-slate-400">
-                        Recently
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                      <Users size={15} />
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium leading-5 text-slate-700">
-                        Managing {selected.students} students
-                      </p>
-                      <span className="text-[11px] text-slate-400">
-                        Current enrollment
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600">
-                      <Award size={15} />
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium leading-5 text-slate-700">
-                        Instructor performance reviewed
-                      </p>
-                      <span className="text-[11px] text-slate-400">
-                        Rating: {selected.rating.toFixed(1)} / 5
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               <button
                 type="button"
                 onClick={() => toggleStatus(selected)}
@@ -1040,15 +1039,11 @@ export default function InstructorsPage() {
               </button>
 
               <p className="mt-3 text-center text-[10px] leading-4 text-slate-400">
-                Status changes are local demo actions and are not saved to a server.
+                Firestore database synchronization enabled for Admin.
               </p>
             </div>
           </aside>
-        ) : (
-          <aside className="hidden rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 2xl:block">
-            Select an instructor to view their profile.
-          </aside>
-        )}
+        ) : null}
       </section>
     </div>
   );

@@ -1,7 +1,7 @@
-
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
+import Swal from "sweetalert2";
 import {
   Activity,
   ArrowUpRight,
@@ -30,7 +30,14 @@ import {
   Users,
   X,
   Zap,
+  Loader2,
 } from "lucide-react";
+import {
+  getSettingsFromDb,
+  saveSettingsToDb,
+  type SettingsData,
+  type TeamMember,
+} from "@/app/lib/db/settings";
 
 type Tab =
   | "General"
@@ -78,6 +85,18 @@ const tabs: { name: Tab; description: string; icon: typeof Settings2 }[] = [
     icon: ShieldCheck,
   },
 ];
+
+const Toast = Swal.mixin({
+  toast: true,
+  position: "top-end",
+  showConfirmButton: false,
+  timer: 3000,
+  timerProgressBar: true,
+  didOpen: (toast) => {
+    toast.onmouseenter = Swal.stopTimer;
+    toast.onmouseleave = Swal.resumeTimer;
+  },
+});
 
 function Toggle({ checked, onChange, label }: ToggleProps) {
   return (
@@ -247,6 +266,8 @@ function Panel({
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("General");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [search, setSearch] = useState("");
   const [logoName, setLogoName] = useState("");
@@ -307,7 +328,7 @@ export default function SettingsPage() {
     youtube: "",
   });
 
-  const [team, setTeam] = useState([
+  const [team, setTeam] = useState<TeamMember[]>([
     {
       name: "Admin User",
       email: "admin@newanext.com",
@@ -333,6 +354,43 @@ export default function SettingsPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("Editor");
   const [showApiKey, setShowApiKey] = useState(false);
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  async function fetchSettings() {
+    try {
+      setLoading(true);
+      const data = await getSettingsFromDb();
+      if (data) {
+        if (data.general) setGeneral(data.general);
+        if (data.branding) {
+          setBranding({
+            primary: data.branding.primary ?? "#6558E8",
+            accent: data.branding.accent ?? "#35A69A",
+            dark: data.branding.dark ?? "#15152B",
+            tagline: data.branding.tagline ?? "Building the Future with Cutting-Edge Software",
+          });
+          if (data.branding.logoPreview) setLogoPreview(data.branding.logoPreview);
+          if (data.branding.logoName) setLogoName(data.branding.logoName);
+        }
+        if (data.notifications) setNotifications(data.notifications);
+        if (data.security) setSecurity(data.security);
+        if (data.integrations) setIntegrations(data.integrations);
+        if (data.social) setSocial(data.social);
+        if (Array.isArray(data.team)) setTeam(data.team);
+      }
+    } catch (error) {
+      console.error("Failed to load settings:", error);
+      Toast.fire({
+        icon: "error",
+        title: "Failed to load settings from database.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const updateGeneral = (key: keyof typeof general, value: string) => {
     setGeneral((previous) => ({ ...previous, [key]: value }));
@@ -369,12 +427,12 @@ export default function SettingsPage() {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      window.alert("Please choose an image file.");
+      Toast.fire({ icon: "warning", title: "Please choose an image file." });
       return;
     }
 
     if (file.size > 2 * 1024 * 1024) {
-      window.alert("Please choose an image smaller than 2 MB.");
+      Toast.fire({ icon: "warning", title: "Please choose an image smaller than 2 MB." });
       return;
     }
 
@@ -382,16 +440,46 @@ export default function SettingsPage() {
 
     const reader = new FileReader();
     reader.onload = () => {
-      setLogoPreview(String(reader.result || ""));
+      const resultString = String(reader.result || "");
+      setLogoPreview(resultString);
     };
     reader.readAsDataURL(file);
     setSaved(false);
   };
 
-  const handleSave = () => {
-    // Connect this handler to your API or server action to persist settings.
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 3000);
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      const payload: SettingsData = {
+        general,
+        branding: {
+          ...branding,
+          logoPreview,
+          logoName,
+        },
+        notifications,
+        security,
+        integrations,
+        social,
+        team,
+      };
+
+      await saveSettingsToDb(payload);
+      setSaved(true);
+      Toast.fire({
+        icon: "success",
+        title: "Settings updated successfully.",
+      });
+      window.setTimeout(() => setSaved(false), 3000);
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+      Toast.fire({
+        icon: "error",
+        title: "Failed to save settings to database.",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const inviteMember = (e: React.FormEvent<HTMLFormElement>) => {
@@ -421,11 +509,19 @@ export default function SettingsPage() {
   );
 
   const inputClass =
-    "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10";
+    "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10";
+
+  if (loading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-[#f7f8fc]">
+        <Loader2 className="animate-spin text-violet-600" size={36} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f7f8fc] text-slate-800">
-      <div className="mx-auto max-w-[1500px] space-y-6 p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-[1500px] space-y-6">
         {/* Page header */}
         <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-center">
           <div>
@@ -463,10 +559,11 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={handleSave}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-600/20 transition hover:bg-violet-700 active:scale-[0.98]"
+              disabled={saving}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-600/20 transition hover:bg-violet-700 active:scale-[0.98] disabled:opacity-50"
             >
               {saved ? <Check size={17} /> : <Save size={17} />}
-              {saved ? "Changes saved" : "Save changes"}
+              {saving ? "Saving..." : saved ? "Changes saved" : "Save changes"}
             </button>
           </div>
         </div>
@@ -1730,10 +1827,11 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={handleSave}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-600/15 transition hover:bg-violet-700 active:scale-[0.98]"
+                  disabled={saving}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-600/15 transition hover:bg-violet-700 active:scale-[0.98] disabled:opacity-50"
                 >
                   {saved ? <Check size={16} /> : <Save size={16} />}
-                  {saved ? "Saved" : "Save changes"}
+                  {saving ? "Saving..." : saved ? "Saved" : "Save changes"}
                 </button>
               </div>
             </div>

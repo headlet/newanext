@@ -1,8 +1,8 @@
-
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
+import Swal from "sweetalert2";
 import {
   Plus,
   Search,
@@ -12,63 +12,22 @@ import {
   Boxes,
   CircleDollarSign,
   AlertTriangle,
+  Loader2,
 } from "lucide-react";
+import { getAllProducts, deleteProductFromDb } from "@/app/lib/db/products";
+import { getAllCategories, type Category } from "@/app/lib/db/categories";
 
-type ProductStatus = "Published" | "Draft";
-
-type Product = {
-  id: number;
-  name: string;
-  sku: string;
-  category: string;
-  price: number;
-  stock: number;
-  status: ProductStatus;
-  image: string;
-};
-
-const initialProducts: Product[] = [
-  {
-    id: 1,
-    name: "Web Development Course",
-    sku: "CRS-001",
-    category: "Courses",
-    price: 4999,
-    stock: 35,
-    status: "Published",
-    image: "",
+const Toast = Swal.mixin({
+  toast: true,
+  position: "top-end",
+  showConfirmButton: false,
+  timer: 3000,
+  timerProgressBar: true,
+  didOpen: (toast) => {
+    toast.onmouseenter = Swal.stopTimer;
+    toast.onmouseleave = Swal.resumeTimer;
   },
-  {
-    id: 2,
-    name: "Programming Handbook",
-    sku: "BK-001",
-    category: "Books",
-    price: 1200,
-    stock: 18,
-    status: "Published",
-    image: "",
-  },
-  {
-    id: 3,
-    name: "UI/UX Design Masterclass",
-    sku: "CRS-002",
-    category: "Courses",
-    price: 2999,
-    stock: 0,
-    status: "Draft",
-    image: "",
-  },
-  {
-    id: 4,
-    name: "Developer Starter Kit",
-    sku: "KIT-001",
-    category: "Accessories",
-    price: 2500,
-    stock: 8,
-    status: "Published",
-    image: "",
-  },
-];
+});
 
 const money = (amount: number) =>
   new Intl.NumberFormat("en-NP", {
@@ -78,16 +37,39 @@ const money = (amount: number) =>
   }).format(amount);
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState(initialProducts);
+  const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [status, setStatus] = useState("All");
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  async function fetchData() {
+    try {
+      setLoading(true);
+      const [productsData, categoriesData] = await Promise.all([
+        getAllProducts(),
+        getAllCategories(),
+      ]);
+      setProducts(productsData);
+      setCategories(categoriesData);
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+      Toast.fire({ icon: "error", title: "Failed to load products or categories." });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const filteredProducts = useMemo(
     () =>
       products.filter((product) => {
         const matchesSearch =
-          `${product.name} ${product.sku} ${product.category}`
+          `${product.name} ${product.sku} ${product.category} ${product.slug}`
             .toLowerCase()
             .includes(search.toLowerCase());
 
@@ -101,14 +83,31 @@ export default function ProductsPage() {
     [products, search, category, status],
   );
 
-  function deleteProduct(id: number) {
-    if (window.confirm("Are you sure you want to delete this product?")) {
-      setProducts((current) => current.filter((product) => product.id !== id));
+  async function handleDelete(product: any) {
+    const result = await Swal.fire({
+      title: "Are you sure?",
+      text: `You are about to delete "${product.name}". This action cannot be undone.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#e11d48",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Yes, delete it!",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await deleteProductFromDb(product.id);
+      setProducts((current) => current.filter((p) => p.id !== product.id));
+      Toast.fire({ icon: "success", title: "Product deleted successfully." });
+    } catch (error) {
+      console.error("Failed to delete product:", error);
+      Toast.fire({ icon: "error", title: "Failed to delete product." });
     }
   }
 
   const inventoryValue = products.reduce(
-    (total, product) => total + product.price * product.stock,
+    (total, product) => total + (product.price || 0) * (product.stock || 0),
     0,
   );
   const lowStock = products.filter(
@@ -116,8 +115,16 @@ export default function ProductsPage() {
   ).length;
   const outOfStock = products.filter((product) => product.stock === 0).length;
 
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <Loader2 className="animate-spin text-indigo-600" size={36} />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-[1600px]">
         <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
@@ -193,7 +200,7 @@ export default function ProductsPage() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by product name or SKU..."
+                placeholder="Search by product name, slug, or SKU..."
                 className="w-full rounded-lg border border-gray-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               />
             </div>
@@ -204,10 +211,11 @@ export default function ProductsPage() {
               className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-indigo-500"
             >
               <option value="All">All categories</option>
-              <option value="Courses">Courses</option>
-              <option value="Books">Books</option>
-              <option value="Accessories">Accessories</option>
-              <option value="Software">Software</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.name}>
+                  {cat.name}
+                </option>
+              ))}
             </select>
 
             <select
@@ -226,6 +234,7 @@ export default function ProductsPage() {
               <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                 <tr>
                   <th className="px-5 py-4 font-medium">Product</th>
+                  <th className="px-5 py-4 font-medium">Slug</th>
                   <th className="px-5 py-4 font-medium">SKU</th>
                   <th className="px-5 py-4 font-medium">Category</th>
                   <th className="px-5 py-4 font-medium">Price</th>
@@ -255,6 +264,9 @@ export default function ProductsPage() {
                           {product.name}
                         </span>
                       </div>
+                    </td>
+                    <td className="px-5 py-4 font-mono text-xs text-gray-500">
+                      /{product.slug}
                     </td>
                     <td className="px-5 py-4 text-gray-500">{product.sku}</td>
                     <td className="px-5 py-4 text-gray-600">
@@ -290,7 +302,7 @@ export default function ProductsPage() {
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-1">
                         <Link
-                          href={`/admin/products/create?edit=${product.id}`}
+                          href={`/admin/products/${product.id}/edit`}
                           title="Edit product"
                           className="rounded-lg p-2 text-gray-500 hover:bg-indigo-50 hover:text-indigo-600"
                         >
@@ -299,7 +311,7 @@ export default function ProductsPage() {
                         <button
                           type="button"
                           title="Delete product"
-                          onClick={() => deleteProduct(product.id)}
+                          onClick={() => handleDelete(product)}
                           className="rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
                         >
                           <Trash2 size={16} />
@@ -312,7 +324,7 @@ export default function ProductsPage() {
                 {filteredProducts.length === 0 && (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-5 py-16 text-center text-gray-500"
                     >
                       <Package className="mx-auto mb-3 text-gray-300" size={36} />

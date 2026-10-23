@@ -23,6 +23,8 @@ import {
   Check,
 } from "lucide-react";
 import { createCourseInDb } from "@/app/lib/db/courses";
+import { getAllUsers } from "@/app/lib/db/user";
+import { getAllCategories, type Category } from "@/app/lib/db/categories";
 
 type Lesson = [string, string];
 
@@ -137,10 +139,16 @@ export default function NewCoursePage() {
   const router = useRouter();
 
   const [title, setTitle] = useState("");
+  const [slug, setSlug] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [description, setDescription] = useState("");
 
-  const [category, setCategory] = useState("Web Development");
+  const [categoriesList, setCategoriesList] = useState<Category[]>([]);
+  const [category, setCategory] = useState("");
+  const [instructorsList, setInstructorsList] = useState<
+    { id: string; name: string }[]
+  >([]);
+
   const [level, setLevel] = useState("Beginner to advanced");
   const [language, setLanguage] = useState("English");
   const [imageName, setImageName] = useState("");
@@ -155,12 +163,9 @@ export default function NewCoursePage() {
   const [price, setPrice] = useState("");
   const [discount, setDiscount] = useState("0");
   const [discountEnd, setDiscountEnd] = useState("");
-  const [instructor, setInstructor] = useState("Suman Adhikari");
+  const [instructor, setInstructor] = useState("");
   const [tags, setTags] = useState([
-    "React",
-    "Node.js",
-    "JavaScript",
-    "Full-stack",
+ 
   ]);
   const [tag, setTag] = useState("");
   const [certificate, setCertificate] = useState(true);
@@ -171,6 +176,50 @@ export default function NewCoursePage() {
     message: string;
     type: "success" | "error";
   } | null>(null);
+
+  // Fetch Instructors (where roleId or role is instructor) & Categories from DB
+  useEffect(() => {
+    async function loadDbData() {
+      try {
+        const [users, cats] = await Promise.all([
+          getAllUsers(),
+          getAllCategories(),
+        ]);
+
+        const filteredInstructors = users.filter((u: any) => {
+          const r = (u.role || u.roleId || "").toLowerCase();
+          return r === "instructor";
+        });
+
+        setInstructorsList(
+          filteredInstructors.map((u) => ({ id: u.uid, name: u.name })),
+        );
+        if (filteredInstructors.length > 0) {
+          setInstructor(filteredInstructors[0].name);
+        }
+
+        setCategoriesList(cats);
+        if (cats.length > 0) {
+          setCategory(cats[0].name);
+        }
+      } catch (err) {
+        console.error("Error loading dynamic data:", err);
+      }
+    }
+    loadDbData();
+  }, []);
+
+  // Auto-generate slug when title changes
+  function handleTitleChange(val: string) {
+    setTitle(val);
+    const generatedSlug = val
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, "")
+      .replace(/[\s_-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    setSlug(generatedSlug);
+  }
 
   const totalLessons = sectionsList.reduce(
     (total, section) => total + section.lessons.length,
@@ -278,6 +327,7 @@ export default function NewCoursePage() {
 
       await createCourseInDb({
         title,
+        slug,
         subtitle,
         description,
         category,
@@ -414,18 +464,29 @@ export default function NewCoursePage() {
               </div>
 
               <div className="space-y-5">
-                <Field label="Course title">
-                  <input
-                    className={inputClass}
-                    value={title}
-                    maxLength={120}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. Full-Stack Web with React & Node"
-                  />
-                  <span className="-mt-1 text-xs font-normal text-gray-400">
-                    {title.length} of 120 characters
-                  </span>
-                </Field>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <Field label="Course title">
+                    <input
+                      className={inputClass}
+                      value={title}
+                      maxLength={120}
+                      onChange={(e) => handleTitleChange(e.target.value)}
+                      placeholder="e.g. Full-Stack Web with React & Node"
+                    />
+                    <span className="-mt-1 text-xs font-normal text-gray-400">
+                      {title.length} of 120 characters
+                    </span>
+                  </Field>
+
+                  <Field label="Slug (Auto-generated)">
+                    <input
+                      className={`${inputClass} bg-gray-50 font-mono text-xs`}
+                      value={slug}
+                      onChange={(e) => setSlug(e.target.value)}
+                      placeholder="full-stack-web-with-react-node"
+                    />
+                  </Field>
+                </div>
 
                 <Field label="Subtitle">
                   <input
@@ -454,12 +515,14 @@ export default function NewCoursePage() {
                       value={category}
                       onChange={(e) => setCategory(e.target.value)}
                     >
-                      <option>Web Development</option>
-                      <option>Data & AI</option>
-                      <option>Cloud & DevOps</option>
-                      <option>Mobile</option>
-                      <option>Design</option>
-                      <option>Security</option>
+                      {categoriesList.map((cat) => (
+                        <option key={cat.id} value={cat.name}>
+                          {cat.name}
+                        </option>
+                      ))}
+                      {categoriesList.length === 0 && (
+                        <option value="Web Development">Web Development</option>
+                      )}
                     </select>
                   </Field>
 
@@ -851,10 +914,14 @@ export default function NewCoursePage() {
                     value={instructor}
                     onChange={(e) => setInstructor(e.target.value)}
                   >
-                    <option>Suman Adhikari</option>
-                    <option>Nirmala Pandey</option>
-                    <option>Kiran Basnet</option>
-                    <option>Rajan Tamang</option>
+                    {instructorsList.map((inst) => (
+                      <option key={inst.id} value={inst.name}>
+                        {inst.name}
+                      </option>
+                    ))}
+                    {instructorsList.length === 0 && (
+                      <option value="Suman Adhikari">Suman Adhikari</option>
+                    )}
                   </select>
                 </Field>
 

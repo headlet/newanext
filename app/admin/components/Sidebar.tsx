@@ -37,18 +37,18 @@ const NAVIGATION = [
     title: "USER MANAGEMENT",
     items: [
       { name: "Users", href: "/admin/users", icon: Users },
+      { name: "Students", href: "/admin/students", icon: Users },
+      { name: "Instructors", href: "/admin/instructors", icon: GraduationCap },
       { name: "Roles", href: "/admin/roles", icon: BookOpen },
-
     ],
   },
   {
     title: "CONTENT MANAGEMENT",
     items: [
+      { name: "Categories", href: "/admin/categories", icon: BookOpen },
       { name: "Courses", href: "/admin/courses", icon: BookOpen },
-      { name: "Students", href: "/admin/students", icon: Users },
       { name: "Services", href: "/admin/services", icon: BookOpen },
       { name: "Products", href: "/admin/products", icon: Package },
-      { name: "Instructors", href: "/admin/instructors", icon: GraduationCap },
       { name: "Portfolio", href: "/admin/portfolio", icon: Globe },
     ],
   },
@@ -61,9 +61,7 @@ const NAVIGATION = [
   },
   {
     title: "SYSTEM",
-    items: [
-      { name: "Settings", href: "/admin/settings", icon: Settings },
-    ],
+    items: [{ name: "Settings", href: "/admin/settings", icon: Settings }],
   },
 ];
 

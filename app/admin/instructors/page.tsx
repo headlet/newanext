@@ -28,14 +28,8 @@ import {
   Users,
   X,
   Loader2,
-  Trash2,
-  Edit3,
 } from "lucide-react";
-import {
-  getAllUsers,
-  saveUserProfile,
-  deleteUserFromDb,
-} from "@/app/lib/db/user";
+import { getAllUsers, saveUserProfile } from "@/app/lib/db/user";
 
 type InstructorStatus = "Active" | "Inactive" | "Suspended";
 
@@ -83,15 +77,13 @@ function Button({
 }: {
   children: React.ReactNode;
   onClick?: () => void;
-  variant?: "primary" | "secondary" | "danger";
+  variant?: "primary" | "secondary";
 }) {
   const variants = {
     primary:
       "bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 active:scale-[0.98]",
     secondary:
       "border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
-    danger:
-      "bg-rose-600 text-white shadow-sm hover:bg-rose-700 active:scale-[0.98]",
   };
 
   return (
@@ -202,7 +194,6 @@ export default function InstructorsPage() {
       setLoading(true);
       const allUsers = await getAllUsers();
 
-      // Filter users where role or roleId is instructor
       const instructorUsers = allUsers.filter((user: any) => {
         const userRole = (user.role || user.roleId || "").toLowerCase();
         return userRole === "instructor";
@@ -356,111 +347,6 @@ export default function InstructorsPage() {
     link.download = "instructors.csv";
     link.click();
     URL.revokeObjectURL(url);
-  }
-
-  async function handleEditInstructor(instructor: Instructor) {
-    if (!isAdminOrEnv) {
-      Toast.fire({
-        icon: "error",
-        title: "Permission denied: Only admin/env emails can edit instructors.",
-      });
-      return;
-    }
-
-    const { value: formValues } = await Swal.fire({
-      title: "Edit Instructor Profile",
-      html: `
-        <input id="swal-input-name" class="swal2-input" placeholder="Name" value="${instructor.name}">
-        <input id="swal-input-spec" class="swal2-input" placeholder="Specialization" value="${instructor.specialization}">
-        <input id="swal-input-loc" class="swal2-input" placeholder="Location" value="${instructor.location}">
-      `,
-      focusConfirm: false,
-      showCancelButton: true,
-      confirmButtonText: "Save Changes",
-      preConfirm: () => {
-        return {
-          name: (document.getElementById("swal-input-name") as HTMLInputElement)
-            ?.value,
-          specialization: (
-            document.getElementById("swal-input-spec") as HTMLInputElement
-          )?.value,
-          location: (
-            document.getElementById("swal-input-loc") as HTMLInputElement
-          )?.value,
-        };
-      },
-    });
-
-    if (!formValues) return;
-
-    try {
-      await saveUserProfile(instructor.id, {
-        name: formValues.name,
-        specialization: formValues.specialization,
-        location: formValues.location,
-      });
-
-      setInstructors((current) =>
-        current.map((item) =>
-          item.id === instructor.id
-            ? {
-                ...item,
-                name: formValues.name,
-                specialization: formValues.specialization,
-                location: formValues.location,
-              }
-            : item,
-        ),
-      );
-
-      Toast.fire({
-        icon: "success",
-        title: "Instructor updated successfully in Firestore.",
-      });
-    } catch (error) {
-      console.error("Failed to edit instructor:", error);
-      Toast.fire({ icon: "error", title: "Failed to update instructor." });
-    }
-  }
-
-  async function handleDeleteInstructor(instructor: Instructor) {
-    if (!isAdminOrEnv) {
-      Toast.fire({
-        icon: "error",
-        title:
-          "Permission denied: Only admin/env emails can delete instructors.",
-      });
-      return;
-    }
-
-    const result = await Swal.fire({
-      title: "Delete Instructor?",
-      text: `Are you sure you want to permanently delete ${instructor.name}?`,
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#e11d48",
-      confirmButtonText: "Yes, delete!",
-    });
-
-    if (!result.isConfirmed) return;
-
-    try {
-      await deleteUserFromDb(instructor.id);
-      setInstructors((current) =>
-        current.filter((item) => item.id !== instructor.id),
-      );
-      if (selectedId === instructor.id) {
-        setDetailOpen(false);
-        setSelectedId(null);
-      }
-      Toast.fire({
-        icon: "success",
-        title: "Instructor deleted from Firestore successfully.",
-      });
-    } catch (error) {
-      console.error("Failed to delete instructor:", error);
-      Toast.fire({ icon: "error", title: "Failed to delete instructor." });
-    }
   }
 
   async function toggleStatus(instructor: Instructor) {
@@ -681,7 +567,7 @@ export default function InstructorsPage() {
                   <th className="px-4 py-4">Students</th>
                   <th className="px-4 py-4">Rating</th>
                   <th className="px-4 py-4">Status</th>
-                  <th className="px-4 py-4 text-right">Actions</th>
+                  <th className="px-4 py-4 text-right">Details</th>
                 </tr>
               </thead>
 
@@ -750,38 +636,18 @@ export default function InstructorsPage() {
                     </td>
 
                     <td className="px-4 py-4 text-right">
-                      <div
-                        className="flex items-center justify-end gap-1"
-                        onClick={(e) => e.stopPropagation()}
+                      <button
+                        type="button"
+                        aria-label={`View ${instructor.name}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedId(instructor.id);
+                          setDetailOpen(true);
+                        }}
+                        className="rounded-lg p-2 text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600"
                       >
-                        <button
-                          type="button"
-                          title="Edit instructor"
-                          onClick={() => handleEditInstructor(instructor)}
-                          className="rounded-lg p-2 text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600"
-                        >
-                          <Edit3 size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          title="Delete instructor"
-                          onClick={() => handleDeleteInstructor(instructor)}
-                          className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`View ${instructor.name}`}
-                          onClick={() => {
-                            setSelectedId(instructor.id);
-                            setDetailOpen(true);
-                          }}
-                          className="rounded-lg p-2 text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600"
-                        >
-                          <Ellipsis size={18} />
-                        </button>
-                      </div>
+                        <Ellipsis size={18} />
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -912,23 +778,6 @@ export default function InstructorsPage() {
                   <MapPin size={14} className="text-slate-400" />
                   {selected.location}
                 </span>
-              </div>
-
-              <div className="mt-5 grid grid-cols-2 gap-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => handleEditInstructor(selected)}
-                >
-                  <Edit3 size={15} />
-                  Edit details
-                </Button>
-                <Button
-                  variant="danger"
-                  onClick={() => handleDeleteInstructor(selected)}
-                >
-                  <Trash2 size={15} />
-                  Delete
-                </Button>
               </div>
 
               {/* Instructor metrics */}

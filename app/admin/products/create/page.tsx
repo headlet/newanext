@@ -1,8 +1,9 @@
-
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import Swal from "sweetalert2";
 import {
   ArrowLeft,
   Save,
@@ -12,21 +13,32 @@ import {
   CircleDollarSign,
   Boxes,
 } from "lucide-react";
+import { createProductInDb } from "@/app/lib/db/products";
+import { getAllCategories, type Category } from "@/app/lib/db/categories";
+
+const Toast = Swal.mixin({
+  toast: true,
+  position: "top-end",
+  showConfirmButton: false,
+  timer: 3000,
+  timerProgressBar: true,
+  didOpen: (toast) => {
+    toast.onmouseenter = Swal.stopTimer;
+    toast.onmouseleave = Swal.resumeTimer;
+  },
+});
 
 const inputClass =
   "w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100";
 
-const formatPrice = (price: number) =>
-  new Intl.NumberFormat("en-NP", {
-    style: "currency",
-    currency: "NPR",
-    maximumFractionDigits: 2,
-  }).format(price);
-
 export default function CreateProductPage() {
+  const router = useRouter();
+
   const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
   const [sku, setSku] = useState("");
-  const [category, setCategory] = useState("Courses");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [comparePrice, setComparePrice] = useState("");
@@ -36,16 +48,42 @@ export default function CreateProductPage() {
   const [imageName, setImageName] = useState("");
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const data = await getAllCategories();
+        setCategories(data);
+        if (data.length > 0) {
+          setCategory(data[0].name);
+        }
+      } catch (error) {
+        console.error("Failed to load categories:", error);
+      }
+    }
+    loadCategories();
+  }, []);
+
+  function handleNameChange(val: string) {
+    setName(val);
+    const generatedSlug = val
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, "")
+      .replace(/[\s_-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    setSlug(generatedSlug);
+  }
+
   function handleImage(file?: File) {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      window.alert("Please select an image file.");
+      Toast.fire({ icon: "error", title: "Please select a valid image file." });
       return;
     }
 
     if (file.size > 3 * 1024 * 1024) {
-      window.alert("Please select an image smaller than 3 MB.");
+      Toast.fire({ icon: "error", title: "Image size must be smaller than 3 MB." });
       return;
     }
 
@@ -53,7 +91,7 @@ export default function CreateProductPage() {
     setImageName(file.name);
   }
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     const numericPrice = Number(price);
@@ -61,25 +99,18 @@ export default function CreateProductPage() {
     const numericStock = Number(stock);
 
     if (!Number.isFinite(numericPrice) || numericPrice < 0) {
-      window.alert("Please enter a valid product price.");
+      Toast.fire({ icon: "error", title: "Please enter a valid product price." });
       return;
     }
 
-    if (
-      !Number.isInteger(numericStock) ||
-      numericStock < 0
-    ) {
-      window.alert("Stock must be a non-negative whole number.");
-      return;
-    }
-
-    if (comparePrice && numericComparePrice < numericPrice) {
-      window.alert("Compare-at price should be greater than or equal to the selling price.");
+    if (!Number.isInteger(numericStock) || numericStock < 0) {
+      Toast.fire({ icon: "error", title: "Stock must be a non-negative whole number." });
       return;
     }
 
     const product = {
       name: name.trim(),
+      slug: slug.trim(),
       sku: sku.trim(),
       category,
       description: description.trim(),
@@ -92,18 +123,21 @@ export default function CreateProductPage() {
     };
 
     setSaving(true);
-    console.log("Product form data:", product);
-
-    window.setTimeout(() => {
+    try {
+      await createProductInDb(product);
+      Toast.fire({ icon: "success", title: "Product created successfully!" });
+      setTimeout(() => {
+        router.push("/admin/products");
+      }, 1000);
+    } catch (error) {
+      console.error("Failed to create product:", error);
+      Toast.fire({ icon: "error", title: "Failed to save product to database." });
       setSaving(false);
-      window.alert(
-        "Product form validated. Connect this form to your API to save the product.",
-      );
-    }, 400);
+    }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-6xl">
         <Link
           href="/admin/products"
@@ -116,7 +150,7 @@ export default function CreateProductPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Create product</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Add a new product, set its pricing, and manage inventory.
+            Add a new product, set its pricing, slug, and manage inventory.
           </p>
         </div>
 
@@ -132,16 +166,29 @@ export default function CreateProductPage() {
                 </p>
 
                 <div className="mt-5 space-y-5">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Product name *
-                    <input
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className={`${inputClass} mt-2`}
-                      placeholder="e.g. Web Development Course"
-                    />
-                  </label>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Product name *
+                      <input
+                        required
+                        value={name}
+                        onChange={(e) => handleNameChange(e.target.value)}
+                        className={`${inputClass} mt-2`}
+                        placeholder="e.g. Web Development Course"
+                      />
+                    </label>
+
+                    <label className="block text-sm font-medium text-gray-700">
+                      Slug (Auto-generated) *
+                      <input
+                        required
+                        value={slug}
+                        onChange={(e) => setSlug(e.target.value)}
+                        className={`${inputClass} mt-2 bg-gray-50 font-mono text-xs`}
+                        placeholder="web-development-course"
+                      />
+                    </label>
+                  </div>
 
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <label className="block text-sm font-medium text-gray-700">
@@ -163,12 +210,14 @@ export default function CreateProductPage() {
                         onChange={(e) => setCategory(e.target.value)}
                         className={`${inputClass} mt-2`}
                       >
-                        <option>Courses</option>
-                        <option>Books</option>
-                        <option>Accessories</option>
-                        <option>Software</option>
-                        <option>Services</option>
-                        <option>Other</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.name}>
+                            {cat.name}
+                          </option>
+                        ))}
+                        {categories.length === 0 && (
+                          <option value="General">General</option>
+                        )}
                       </select>
                     </label>
                   </div>
@@ -181,11 +230,8 @@ export default function CreateProductPage() {
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       className={`${inputClass} mt-2 resize-y`}
-                      placeholder="Describe the product, its features, and what customers receive..."
+                      placeholder="Describe the product, its features..."
                     />
-                    <span className="mt-1 block text-right text-xs font-normal text-gray-400">
-                      {description.length}/3000 characters
-                    </span>
                   </label>
                 </div>
               </section>
@@ -230,11 +276,6 @@ export default function CreateProductPage() {
                     />
                   </label>
                 </div>
-
-                <p className="mt-3 text-xs leading-5 text-gray-500">
-                  The compare-at price can be used to display a discount when
-                  the product is sold at a lower price.
-                </p>
               </section>
 
               <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
@@ -262,9 +303,6 @@ export default function CreateProductPage() {
                       />
                     </div>
                   </label>
-                  <p className="mt-2 text-xs text-gray-500">
-                    Enter 0 if the product is currently unavailable.
-                  </p>
                 </div>
               </section>
             </div>
@@ -288,9 +326,6 @@ export default function CreateProductPage() {
                       <ImagePlus size={32} className="text-gray-400" />
                       <span className="mt-3 text-sm font-medium text-gray-700">
                         Click to upload
-                      </span>
-                      <span className="mt-1 text-xs text-gray-400">
-                        PNG, JPG or WebP · Max 3 MB
                       </span>
                     </>
                   )}
@@ -340,66 +375,6 @@ export default function CreateProductPage() {
                     <option value="Published">Published</option>
                   </select>
                 </label>
-
-                <p className="mt-2 text-xs leading-5 text-gray-500">
-                  Only publish products that are ready to be displayed to
-                  customers.
-                </p>
-              </section>
-
-              <section className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-5">
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-indigo-900">
-                  <Package size={17} />
-                  Product summary
-                </h2>
-
-                <p className="mt-4 break-words font-medium text-gray-900">
-                  {name || "Product name"}
-                </p>
-                <p className="mt-1 text-xs text-gray-500">
-                  {sku || "SKU not set"} · {category}
-                </p>
-
-                <div className="mt-4 border-t border-indigo-100 pt-4">
-                  <p className="text-xs text-gray-500">Selling price</p>
-                  <p className="mt-1 text-xl font-bold text-gray-900">
-                    {price !== "" && Number(price) >= 0
-                      ? formatPrice(Number(price))
-                      : formatPrice(0)}
-                  </p>
-
-                  {comparePrice !== "" &&
-                    Number(comparePrice) >= Number(price) && (
-                      <p className="mt-1 text-xs text-gray-500 line-through">
-                        {formatPrice(Number(comparePrice))}
-                      </p>
-                    )}
-                </div>
-
-                <div className="mt-4 flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Stock</span>
-                  <span
-                    className={`font-semibold ${
-                      Number(stock) === 0
-                        ? "text-red-600"
-                        : Number(stock) <= 10
-                          ? "text-amber-600"
-                          : "text-emerald-600"
-                    }`}
-                  >
-                    {stock || "0"} units
-                  </span>
-                </div>
-
-                <span
-                  className={`mt-4 inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    status === "Published"
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-amber-100 text-amber-700"
-                  }`}
-                >
-                  {status}
-                </span>
               </section>
 
               <div className="flex flex-col gap-2">

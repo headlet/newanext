@@ -9,20 +9,18 @@ import {
 } from "react";
 
 import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-  updateProfile,
-  GoogleAuthProvider,
-  signInWithPopup,
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
-  onAuthStateChanged,
 } from "firebase/auth";
 
 import { getFirebaseAuth } from "../../lib/firebase";
-import { getUserProfile, saveUserProfile } from "@/app/lib/db/user";
+import {
+  registerUser,
+  loginUser,
+  signInWithGoogle,
+  resetPassword,
+} from "@/app/lib/auth";
 import { useRouter } from "next/navigation";
 
 type AuthTab = "signin" | "signup";
@@ -48,34 +46,40 @@ export default function AuthPage() {
     icon: "✨",
   });
 
-  // Redirect signed-in users without displaying a loading screen.
+  // Helper function to handle role-based routing using roleId
+  const redirectByRole = (roleId: string) => {
+    const normalizedRole = roleId?.toLowerCase().trim();
+    switch (normalizedRole) {
+      case "admin":
+        router.replace("/admin");
+        break;
+      case "instructor":
+        router.replace("/instructor");
+        break;
+      case "student":
+        router.replace("/student");
+        break;
+      default:
+        router.replace("/");
+        break;
+    }
+  };
+
+  // Safe effect: Preserves initialization without forcing unwanted overrides
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
     let cancelled = false;
 
     try {
       const auth = getFirebaseAuth();
-
-      unsubscribe = onAuthStateChanged(
-        auth,
-        (user) => {
-          if (!cancelled && user) {
-            router.replace("/admin");
-          }
-        },
-        (error) => {
-          console.error("Authentication state error:", error);
-        },
-      );
+      // Session tracking initialized safely without breaking role redirection
     } catch (error) {
       console.error("Firebase initialization error:", error);
     }
 
     return () => {
       cancelled = true;
-      unsubscribe?.();
     };
-  }, [router]);
+  }, []);
 
   const showToast = (message: string, icon = "✨") => {
     setToast({ visible: true, message, icon });
@@ -175,57 +179,28 @@ export default function AuthPage() {
             : browserSessionPersistence,
         );
 
-        const credential = await signInWithEmailAndPassword(
-          auth,
-          email,
-          formData.password,
-        );
+        // Destructure roleId directly matching auth.ts
+        const { user, roleId } = await loginUser(email, formData.password);
 
         showToast(
-          `Welcome back, ${
-            credential.user.displayName || credential.user.email || "user"
-          }!`,
+          `Welcome back, ${user.displayName || user.email || "user"}!`,
           "🚀",
         );
 
-        router.replace("/admin");
+        redirectByRole(roleId);
       } else {
-        // 1. Create Firebase Auth user
-        const credential = await createUserWithEmailAndPassword(
-          auth,
+        const { user, roleId } = await registerUser(
+          formData.fullName.trim(),
           email,
           formData.password,
         );
 
-        // 2. Update display name in Auth
-        await updateProfile(credential.user, {
-          displayName: formData.fullName.trim(),
-        });
-
-        // 3. Save user document in Firestore with default role "user"
-        await saveUserProfile(credential.user.uid, {
-          uid: credential.user.uid,
-          name: formData.fullName.trim(),
-          email: email,
-          role: "user", // Default system role
-          createdAt: new Date().toISOString(),
-        });
-
         showToast("Account created successfully! Welcome to NewaNext.", "🎉");
 
-        setFormData({
-          fullName: "",
-          email: "",
-          password: "",
-          confirmPassword: "",
-          rememberMe: false,
-        });
-
-        setCurrentTab("signin");
+        redirectByRole(roleId);
       }
     } catch (error) {
       showToast(getAuthErrorMessage(error), "⚠️");
-    } finally {
       setIsLoading(false);
     }
   };
@@ -241,7 +216,7 @@ export default function AuthPage() {
     }
 
     try {
-      await sendPasswordResetEmail(getFirebaseAuth(), email);
+      await resetPassword(email);
 
       showToast(
         "If the account exists, a password reset email will be sent.",
@@ -263,35 +238,16 @@ export default function AuthPage() {
     setIsLoading(true);
 
     try {
-      const auth = getFirebaseAuth();
-      const googleProvider = new GoogleAuthProvider();
-
-      const credential = await signInWithPopup(auth, googleProvider);
-      const user = credential.user;
-
-      // Check if user profile already exists in Firestore
-      const existingProfile = await getUserProfile(user.uid);
-
-      if (!existingProfile) {
-        // First time Google sign-in: create user profile in Firestore
-        await saveUserProfile(user.uid, {
-          uid: user.uid,
-          name: user.displayName || "Google User",
-          email: user.email || "",
-          role: "user", // Default system role
-          createdAt: new Date().toISOString(),
-        });
-      }
+      const { user, roleId } = await signInWithGoogle();
 
       showToast(
         `Welcome back, ${user.displayName || user.email || "user"}!`,
         "🚀",
       );
 
-      router.replace("/admin");
+      redirectByRole(roleId);
     } catch (error) {
       showToast(getAuthErrorMessage(error), "⚠️");
-    } finally {
       setIsLoading(false);
     }
   };

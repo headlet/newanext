@@ -1,5 +1,3 @@
-"use client";
-
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -13,13 +11,22 @@ import {
 import { getFirebaseAuth } from "./firebase";
 import { getUserProfile, saveUserProfile } from "./db/user";
 
+// Helper to check if email is in NEXT_PUBLIC_ADMIN_EMAILS
+function isAdminEmail(email: string | null): boolean {
+  if (!email) return false;
+  const adminEmailsString = process.env.NEXT_PUBLIC_ADMIN_EMAILS || "";
+  const adminEmails = adminEmailsString
+    .split(",")
+    .map((e) => e.trim().toLowerCase());
+  return adminEmails.includes(email.toLowerCase());
+}
+
 export async function registerUser(
   name: string,
   email: string,
   password: string
 ) {
   const auth = getFirebaseAuth();
-
   const credential = await createUserWithEmailAndPassword(
     auth,
     email,
@@ -28,16 +35,18 @@ export async function registerUser(
 
   await updateProfile(credential.user, { displayName: name });
 
-  // Save user profile in Firestore with default role "user"
+  // Assign roleId based on admin email list or default to "student"
+  const roleId = isAdminEmail(email) ? "admin" : "student";
+
   await saveUserProfile(credential.user.uid, {
     uid: credential.user.uid,
     name: name,
     email: email,
-    role: "student", // Default role assigned here
+    roleId: roleId,
     createdAt: new Date().toISOString(),
   });
 
-  return credential.user;
+  return { user: credential.user, roleId };
 }
 
 export async function loginUser(email: string, password: string) {
@@ -47,7 +56,16 @@ export async function loginUser(email: string, password: string) {
     password
   );
 
-  return credential.user;
+  // If email matches admin list, bypass Firestore check and return admin roleId
+  if (isAdminEmail(credential.user.email)) {
+    return { user: credential.user, roleId: "admin" };
+  }
+
+  // Fetch roleId from Firestore user profile
+  const profile = await getUserProfile(credential.user.uid);
+  const roleId = profile?.roleId || "student";
+
+  return { user: credential.user, roleId };
 }
 
 export async function signInWithGoogle() {
@@ -56,21 +74,25 @@ export async function signInWithGoogle() {
   const credential = await signInWithPopup(auth, provider);
   const user = credential.user;
 
-  // Check if profile already exists in Firestore
-  const existingProfile = await getUserProfile(user.uid);
+  if (isAdminEmail(user.email)) {
+    return { user, roleId: "admin" };
+  }
 
-  if (!existingProfile) {
-    // First time Google sign-in: create user profile in Firestore
+  const profile = await getUserProfile(user.uid);
+  let roleId = profile?.roleId;
+
+  if (!profile) {
+    roleId = "student"; // Default roleId for new Google users
     await saveUserProfile(user.uid, {
       uid: user.uid,
       name: user.displayName || "Google User",
       email: user.email || "",
-      role: "student",
+      roleId: roleId,
       createdAt: new Date().toISOString(),
     });
   }
 
-  return user;
+  return { user, roleId: roleId || "student" };
 }
 
 export async function logoutUser() {

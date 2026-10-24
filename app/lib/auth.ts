@@ -6,10 +6,14 @@ import {
   updateProfile,
   GoogleAuthProvider,
   signInWithPopup,
+  type User,
 } from "firebase/auth";
 
 import { getFirebaseAuth } from "./firebase";
 import { getUserProfile, saveUserProfile } from "./db/user";
+
+const SESSION_KEY = "newanext_last_login_time";
+const TWO_HOURS_MS = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
 
 // Helper to check if email is in NEXT_PUBLIC_ADMIN_EMAILS
 function isAdminEmail(email: string | null): boolean {
@@ -19,6 +23,46 @@ function isAdminEmail(email: string | null): boolean {
     .split(",")
     .map((e) => e.trim().toLowerCase());
   return adminEmails.includes(email.toLowerCase());
+}
+
+/**
+ * Stores the current timestamp in localStorage to track session age
+ */
+export function recordSessionStartTime() {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(SESSION_KEY, Date.now().toString());
+  }
+}
+
+/**
+ * Validates if the user session has exceeded 2 hours.
+ * If expired, logs out the user and clears session storage.
+ */
+export async function checkAndEnforceSessionTimeout(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+
+  const auth = getFirebaseAuth();
+  const currentUser = auth.currentUser;
+
+  if (!currentUser) return false;
+
+  const lastLoginStr = localStorage.getItem(SESSION_KEY);
+  if (!lastLoginStr) {
+    // If no session time exists for logged-in user, start tracking now
+    recordSessionStartTime();
+    return false;
+  }
+
+  const lastLoginTime = parseInt(lastLoginStr, 10);
+  const now = Date.now();
+
+  if (now - lastLoginTime > TWO_HOURS_MS) {
+    // Session expired: Logout user and clean up storage
+    await logoutUser();
+    return true; // Indicates session was expired and logged out
+  }
+
+  return false;
 }
 
 export async function registerUser(
@@ -35,7 +79,6 @@ export async function registerUser(
 
   await updateProfile(credential.user, { displayName: name });
 
-  // Assign roleId based on admin email list or default to "student"
   const roleId = isAdminEmail(email) ? "admin" : "student";
 
   await saveUserProfile(credential.user.uid, {
@@ -46,6 +89,7 @@ export async function registerUser(
     createdAt: new Date().toISOString(),
   });
 
+  recordSessionStartTime();
   return { user: credential.user, roleId };
 }
 
@@ -56,12 +100,12 @@ export async function loginUser(email: string, password: string) {
     password
   );
 
-  // If email matches admin list, bypass Firestore check and return admin roleId
+  recordSessionStartTime();
+
   if (isAdminEmail(credential.user.email)) {
     return { user: credential.user, roleId: "admin" };
   }
 
-  // Fetch roleId from Firestore user profile
   const profile = await getUserProfile(credential.user.uid);
   const roleId = profile?.roleId || "student";
 
@@ -74,6 +118,8 @@ export async function signInWithGoogle() {
   const credential = await signInWithPopup(auth, provider);
   const user = credential.user;
 
+  recordSessionStartTime();
+
   if (isAdminEmail(user.email)) {
     return { user, roleId: "admin" };
   }
@@ -82,7 +128,7 @@ export async function signInWithGoogle() {
   let roleId = profile?.roleId;
 
   if (!profile) {
-    roleId = "student"; // Default roleId for new Google users
+    roleId = "student";
     await saveUserProfile(user.uid, {
       uid: user.uid,
       name: user.displayName || "Google User",
@@ -96,6 +142,9 @@ export async function signInWithGoogle() {
 }
 
 export async function logoutUser() {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(SESSION_KEY);
+  }
   await signOut(getFirebaseAuth());
 }
 

@@ -1,14 +1,21 @@
-
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
-    const privateKey = process.env.IMAGEKIT_PRIVATE_KEY?.trim();
+    const { env } = getCloudflareContext();
+
+    const privateKey = (
+      env.IMAGEKIT_PRIVATE_KEY ||
+      process.env.IMAGEKIT_PRIVATE_KEY ||
+      ""
+    ).trim();
 
     if (!privateKey) {
-      console.error("IMAGEKIT_PRIVATE_KEY is missing.");
+      console.error("ImageKit private key is missing at runtime.");
 
       return NextResponse.json(
         { error: "ImageKit private key is not configured on the server." },
@@ -26,8 +33,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ImageKit requires HTTP Basic Auth using "privateKey:".
-    // The private key must never be sent to the browser.
     const authorization =
       "Basic " + Buffer.from(`${privateKey}:`).toString("base64");
 
@@ -46,11 +51,8 @@ export async function POST(request: NextRequest) {
     if (!imageKitResponse.ok) {
       const details = await imageKitResponse.text();
 
-      // Log the underlying ImageKit error in the server terminal.
-      console.error("ImageKit API rejected file deletion:", {
+      console.error("ImageKit deletion rejected:", {
         status: imageKitResponse.status,
-        details,
-        fileId,
       });
 
       return NextResponse.json(
@@ -73,8 +75,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: "The server could not complete the ImageKit deletion request.",
-        details:
-          error instanceof Error ? error.message : "Unknown server error.",
       },
       { status: 500 },
     );

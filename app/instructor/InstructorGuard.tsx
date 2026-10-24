@@ -2,10 +2,13 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, getFirestore } from "firebase/firestore";
 import { getFirebaseAuth, getFirebaseApp } from "../lib/firebase";
 import { Loader2 } from "lucide-react";
+
+const SESSION_KEY = "newanext_last_login_time";
+const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
 export default function InstructorGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -23,6 +26,23 @@ export default function InstructorGuard({ children }: { children: ReactNode }) {
           setAuthorized(false);
           router.replace("/login");
           return;
+        }
+
+        // 2-Hour Session Timeout Check
+        const lastLoginStr = localStorage.getItem(SESSION_KEY);
+        const now = Date.now();
+        if (lastLoginStr) {
+          const lastLoginTime = parseInt(lastLoginStr, 10);
+          if (now - lastLoginTime > TWO_HOURS_MS) {
+            console.log("Guard: Session expired (> 2 hours). Logging out.");
+            localStorage.removeItem(SESSION_KEY);
+            await signOut(auth);
+            setAuthorized(false);
+            router.replace("/login");
+            return;
+          }
+        } else {
+          localStorage.setItem(SESSION_KEY, now.toString());
         }
 
         // 1. Read from either NEXT_PUBLIC_ADMIN_EMAILS or NEXT_PUBLIC_ADMIN_EMAIL
@@ -66,7 +86,9 @@ export default function InstructorGuard({ children }: { children: ReactNode }) {
               : "";
 
             if (userRole === "instructor") {
-              console.log("Guard: Firestore role is Instructor! Access granted.");
+              console.log(
+                "Guard: Firestore role is Instructor! Access granted.",
+              );
               setAuthorized(true);
               return;
             }

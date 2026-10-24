@@ -2,10 +2,13 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, getFirestore } from "firebase/firestore";
 import { getFirebaseAuth, getFirebaseApp } from "../../lib/firebase";
 import { Loader2 } from "lucide-react";
+
+const SESSION_KEY = "newanext_last_login_time";
+const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
 export default function StudentGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -22,6 +25,22 @@ export default function StudentGuard({ children }: { children: ReactNode }) {
           setAuthorized(false);
           router.replace("/login");
           return;
+        }
+
+        // 2-Hour Session Timeout Check
+        const lastLoginStr = localStorage.getItem(SESSION_KEY);
+        const now = Date.now();
+        if (lastLoginStr) {
+          const lastLoginTime = parseInt(lastLoginStr, 10);
+          if (now - lastLoginTime > TWO_HOURS_MS) {
+            localStorage.removeItem(SESSION_KEY);
+            await signOut(auth);
+            setAuthorized(false);
+            router.replace("/login");
+            return;
+          }
+        } else {
+          localStorage.setItem(SESSION_KEY, now.toString());
         }
 
         // Check Admin email override

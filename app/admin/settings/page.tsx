@@ -31,6 +31,8 @@ import {
   X,
   Zap,
   Loader2,
+  Camera,
+  LoaderCircle,
 } from "lucide-react";
 import {
   getSettingsFromDb,
@@ -52,6 +54,21 @@ type ToggleProps = {
   onChange: (checked: boolean) => void;
   label?: string;
 };
+
+type ImageKitAuth = {
+  token: string;
+  expire: number;
+  signature: string;
+  publicKey: string;
+};
+
+type ImageKitUploadResult = {
+  url?: string;
+  fileId?: string;
+  message?: string;
+};
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 const tabs: { name: Tab; description: string; icon: typeof Settings2 }[] = [
   {
@@ -207,9 +224,7 @@ function SectionHeading({
           <h2 className="text-base font-bold tracking-tight text-slate-900">
             {title}
           </h2>
-          <p className="mt-1 text-sm leading-6 text-slate-500">
-            {description}
-          </p>
+          <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
         </div>
       </div>
       {action}
@@ -268,10 +283,12 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("General");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [saved, setSaved] = useState(false);
   const [search, setSearch] = useState("");
   const [logoName, setLogoName] = useState("");
   const [logoPreview, setLogoPreview] = useState("");
+  const [logoFileId, setLogoFileId] = useState("");
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [general, setGeneral] = useState({
@@ -370,9 +387,16 @@ export default function SettingsPage() {
             primary: data.branding.primary ?? "#6558E8",
             accent: data.branding.accent ?? "#35A69A",
             dark: data.branding.dark ?? "#15152B",
-            tagline: data.branding.tagline ?? "Building the Future with Cutting-Edge Software",
+            tagline:
+              data.branding.tagline ??
+              "Building the Future with Cutting-Edge Software",
           });
-          if (data.branding.logoPreview) setLogoPreview(data.branding.logoPreview);
+          if (data.branding.logoUrl) {
+            setLogoPreview(data.branding.logoUrl);
+          } else if (data.branding.logoPreview) {
+            setLogoPreview(data.branding.logoPreview);
+          }
+          if (data.branding.logoFileId) setLogoFileId(data.branding.logoFileId);
           if (data.branding.logoName) setLogoName(data.branding.logoName);
         }
         if (data.notifications) setNotifications(data.notifications);
@@ -423,29 +447,90 @@ export default function SettingsPage() {
     setSaved(false);
   };
 
-  const handleLogoChange = (file?: File) => {
+  // ImageKit Direct Logo Upload handler
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      Toast.fire({ icon: "warning", title: "Please choose an image file." });
+      Toast.fire({
+        icon: "warning",
+        title: "Please select a valid image file.",
+      });
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      Toast.fire({ icon: "warning", title: "Please choose an image smaller than 2 MB." });
+    if (file.size > MAX_FILE_SIZE) {
+      Toast.fire({
+        icon: "warning",
+        title: "Image size must be 10 MB or less.",
+      });
       return;
     }
 
-    setLogoName(file.name);
+    setIsUploadingLogo(true);
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const resultString = String(reader.result || "");
-      setLogoPreview(resultString);
-    };
-    reader.readAsDataURL(file);
-    setSaved(false);
-  };
+    try {
+      const authResponse = await fetch("/api/upload-auth", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const authData = await authResponse.json().catch(() => ({}));
+      if (!authResponse.ok) {
+        throw new Error(
+          authData.message || "Failed to authenticate ImageKit upload.",
+        );
+      }
+
+      const auth = authData as ImageKitAuth;
+      const generatedFileName = `logo-${Date.now()}.${file.name.split(".").pop() || "img"}`;
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("fileName", generatedFileName);
+      formData.append("folder", "/settings");
+      formData.append("useUniqueFileName", "true");
+      formData.append("token", auth.token);
+      formData.append("expire", String(auth.expire));
+      formData.append("signature", auth.signature);
+      formData.append("publicKey", auth.publicKey);
+
+      const uploadResponse = await fetch(
+        "https://upload.imagekit.io/api/v1/files/upload",
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
+
+      const uploadResult: ImageKitUploadResult = await uploadResponse
+        .json()
+        .catch(() => ({}));
+
+      if (!uploadResponse.ok || !uploadResult.url || !uploadResult.fileId) {
+        throw new Error(uploadResult.message || "Image upload failed.");
+      }
+
+      setLogoPreview(uploadResult.url);
+      setLogoFileId(uploadResult.fileId);
+      setLogoName(file.name);
+      setSaved(false);
+      Toast.fire({
+        icon: "success",
+        title: "Logo uploaded to ImageKit successfully!",
+      });
+    } catch (error: any) {
+      console.error("Logo upload error:", error);
+      Toast.fire({
+        icon: "error",
+        title: error.message || "Failed to upload logo.",
+      });
+    } finally {
+      setIsUploadingLogo(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  }
 
   const handleSave = async () => {
     try {
@@ -456,6 +541,9 @@ export default function SettingsPage() {
           ...branding,
           logoPreview,
           logoName,
+          logoUrl: logoPreview,
+          logoFileId,
+          logoFolder: "/settings",
         },
         notifications,
         security,
@@ -505,7 +593,9 @@ export default function SettingsPage() {
   };
 
   const filteredTabs = tabs.filter((tab) =>
-    `${tab.name} ${tab.description}`.toLowerCase().includes(search.toLowerCase()),
+    `${tab.name} ${tab.description}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
   );
 
   const inputClass =
@@ -683,7 +773,9 @@ export default function SettingsPage() {
               >
                 <CircleHelp size={18} className="text-slate-400" />
                 <span className="flex-1">
-                  <span className="block text-sm font-semibold">Help center</span>
+                  <span className="block text-sm font-semibold">
+                    Help center
+                  </span>
                   <span className="mt-1 block text-[11px] text-slate-400">
                     Website and workspace help
                   </span>
@@ -700,8 +792,8 @@ export default function SettingsPage() {
                 Keep your site consistent
               </h3>
               <p className="mt-1.5 text-xs leading-5 text-slate-500">
-                Keep your company information and visual identity aligned
-                across your website and business communications.
+                Keep your company information and visual identity aligned across
+                your website and business communications.
               </p>
               <button
                 type="button"
@@ -993,7 +1085,12 @@ export default function SettingsPage() {
                     </h3>
                     <div className="flex flex-col gap-4 rounded-xl border border-slate-200 p-4 sm:flex-row sm:items-center">
                       <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
-                        {logoPreview ? (
+                        {isUploadingLogo ? (
+                          <LoaderCircle
+                            className="animate-spin text-violet-600"
+                            size={24}
+                          />
+                        ) : logoPreview ? (
                           <img
                             src={logoPreview}
                             alt="Selected company logo"
@@ -1013,15 +1110,17 @@ export default function SettingsPage() {
                           {logoName || "NewaNext logo"}
                         </p>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
-                          PNG, JPG, SVG or WebP. Maximum file size: 2 MB.
+                          PNG, JPG, SVG or WebP via ImageKit. Maximum file size:
+                          10 MB.
                         </p>
                         <div className="mt-3 flex flex-wrap gap-2">
                           <button
                             type="button"
                             onClick={() => logoInputRef.current?.click()}
-                            className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-violet-700"
+                            disabled={isUploadingLogo}
+                            className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-violet-700 disabled:opacity-50"
                           >
-                            Upload logo
+                            {isUploadingLogo ? "Uploading..." : "Upload logo"}
                           </button>
                           {logoPreview && (
                             <button
@@ -1029,9 +1128,11 @@ export default function SettingsPage() {
                               onClick={() => {
                                 setLogoName("");
                                 setLogoPreview("");
+                                setLogoFileId("");
                                 if (logoInputRef.current) {
                                   logoInputRef.current.value = "";
                                 }
+                                setSaved(false);
                               }}
                               className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
                             >
@@ -1044,9 +1145,7 @@ export default function SettingsPage() {
                           type="file"
                           accept="image/*"
                           className="hidden"
-                          onChange={(e) =>
-                            handleLogoChange(e.target.files?.[0])
-                          }
+                          onChange={handleLogoUpload}
                         />
                       </div>
                     </div>
@@ -1240,13 +1339,17 @@ export default function SettingsPage() {
                                 disabled={member.role === "Owner"}
                                 className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-violet-400 disabled:bg-slate-50 disabled:text-slate-400"
                               >
-                                {["Owner", "Admin", "Editor", "Developer", "Viewer"].map(
-                                  (role) => (
-                                    <option key={role} value={role}>
-                                      {role}
-                                    </option>
-                                  ),
-                                )}
+                                {[
+                                  "Owner",
+                                  "Admin",
+                                  "Editor",
+                                  "Developer",
+                                  "Viewer",
+                                ].map((role) => (
+                                  <option key={role} value={role}>
+                                    {role}
+                                  </option>
+                                ))}
                               </select>
                             </td>
                             <td className="py-4 pr-4">
@@ -1314,11 +1417,35 @@ export default function SettingsPage() {
                       </thead>
                       <tbody>
                         {[
-                          ["Manage company settings", true, false, false, false],
+                          [
+                            "Manage company settings",
+                            true,
+                            false,
+                            false,
+                            false,
+                          ],
                           ["Manage team members", true, false, false, false],
-                          ["Edit services and products", true, true, false, false],
-                          ["Manage courses and content", true, true, false, false],
-                          ["Manage portfolio projects", true, true, false, false],
+                          [
+                            "Edit services and products",
+                            true,
+                            true,
+                            false,
+                            false,
+                          ],
+                          [
+                            "Manage courses and content",
+                            true,
+                            true,
+                            false,
+                            false,
+                          ],
+                          [
+                            "Manage portfolio projects",
+                            true,
+                            true,
+                            false,
+                            false,
+                          ],
                           ["Manage integrations", true, false, true, false],
                           ["View enquiries", true, true, false, true],
                         ].map((row) => (
@@ -1345,10 +1472,6 @@ export default function SettingsPage() {
                       </tbody>
                     </table>
                   </div>
-                  <p className="mt-4 text-xs leading-5 text-slate-500">
-                    This table is a visual permission reference. Enforce actual
-                    access permissions on your server and API.
-                  </p>
                 </Panel>
               </>
             )}
@@ -1365,7 +1488,10 @@ export default function SettingsPage() {
 
                   <div className="mb-4 rounded-xl border border-violet-100 bg-violet-50/60 p-4">
                     <div className="flex items-start gap-3">
-                      <Mail size={18} className="mt-0.5 shrink-0 text-violet-600" />
+                      <Mail
+                        size={18}
+                        className="mt-0.5 shrink-0 text-violet-600"
+                      />
                       <div>
                         <p className="text-sm font-bold text-slate-800">
                           Notification recipient
@@ -1540,10 +1666,7 @@ export default function SettingsPage() {
                           <button
                             type="button"
                             onClick={() =>
-                              updateIntegration(
-                                integration.key,
-                                !connected,
-                              )
+                              updateIntegration(integration.key, !connected)
                             }
                             className={`shrink-0 rounded-lg px-4 py-2.5 text-xs font-bold transition ${
                               connected
@@ -1551,23 +1674,13 @@ export default function SettingsPage() {
                                 : "bg-violet-600 text-white hover:bg-violet-700"
                             }`}
                           >
-                            {connected ? "Mark unconfigured" : "Mark configured"}
+                            {connected
+                              ? "Mark unconfigured"
+                              : "Mark configured"}
                           </button>
                         </div>
                       );
                     })}
-                  </div>
-
-                  <div className="mt-5 rounded-xl border border-amber-100 bg-amber-50/70 p-4">
-                    <p className="flex items-center gap-2 text-xs font-bold text-amber-800">
-                      <CircleHelp size={15} />
-                      Integration status is illustrative
-                    </p>
-                    <p className="mt-1.5 text-xs leading-5 text-amber-800/80">
-                      These controls do not connect external services. Add the
-                      provider credentials and server-side integration before
-                      treating any service as connected.
-                    </p>
                   </div>
                 </Panel>
 
@@ -1626,45 +1739,6 @@ export default function SettingsPage() {
                     />
                   </div>
                 </Panel>
-
-                <Panel>
-                  <SectionHeading
-                    icon={KeyRound}
-                    title="API configuration"
-                    description="Reserve a secure place for API credentials used by your integrations."
-                  />
-                  <div className="rounded-xl border border-slate-200 p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-                        <LockKeyhole size={18} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold text-slate-800">
-                          API credentials
-                        </p>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">
-                          Store secrets in server-side environment variables.
-                          Do not expose private keys in client-side React code.
-                        </p>
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          <code className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600">
-                            {showApiKey
-                              ? "Use server-side environment variables"
-                              : "••••••••••••••••••••"}
-                          </code>
-                          <button
-                            type="button"
-                            onClick={() => setShowApiKey((v) => !v)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                          >
-                            <Eye size={14} />
-                            {showApiKey ? "Hide" : "Show guidance"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Panel>
               </>
             )}
 
@@ -1700,7 +1774,7 @@ export default function SettingsPage() {
                   <SettingRow
                     icon={LockKeyhole}
                     title="Two-factor authentication"
-                    description="Enable an additional verification step when signing in. This toggle is a preference only until connected to your authentication system."
+                    description="Enable an additional verification step when signing in."
                     checked={security.twoFactor}
                     onChange={(v) => updateSecurity("twoFactor", v)}
                   />
@@ -1726,92 +1800,10 @@ export default function SettingsPage() {
                     onChange={(v) => updateSecurity("strongPasswords", v)}
                   />
                 </Panel>
-
-                <Panel>
-                  <SectionHeading
-                    icon={KeyRound}
-                    title="Password and sessions"
-                    description="Actions to add to your authentication backend."
-                  />
-
-                  <div className="divide-y divide-slate-100">
-                    <div className="flex flex-col justify-between gap-3 py-4 first:pt-0 sm:flex-row sm:items-center">
-                      <div>
-                        <p className="text-sm font-bold text-slate-800">
-                          Change password
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Update the password for your administrator account.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          window.alert(
-                            "Connect this action to your authenticated password-change flow.",
-                          )
-                        }
-                        className="rounded-lg border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
-                      >
-                        Change password
-                      </button>
-                    </div>
-
-                    <div className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-center">
-                      <div>
-                        <p className="text-sm font-bold text-slate-800">
-                          Active sessions
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Review and revoke signed-in devices and sessions.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          window.alert(
-                            "Connect this action to your session-management backend.",
-                          )
-                        }
-                        className="rounded-lg border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
-                      >
-                        Manage sessions
-                      </button>
-                    </div>
-
-                    <div className="flex flex-col justify-between gap-3 py-4 last:pb-0 sm:flex-row sm:items-center">
-                      <div>
-                        <p className="text-sm font-bold text-red-700">
-                          Sign out all devices
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Revoke other sessions after a security incident.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              "This must revoke sessions through your backend. Continue to the integration placeholder?",
-                            )
-                          ) {
-                            window.alert(
-                              "Connect this action to your authentication provider before using it.",
-                            );
-                          }
-                        }}
-                        className="rounded-lg border border-red-200 px-3.5 py-2.5 text-xs font-bold text-red-600 transition hover:bg-red-50"
-                      >
-                        Revoke sessions
-                      </button>
-                    </div>
-                  </div>
-                </Panel>
               </>
             )}
 
-            {/* Footer */}
+            {/* Footer Save */}
             <div className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:px-5">
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <ShieldCheck size={16} className="text-emerald-600" />
@@ -1890,11 +1882,6 @@ export default function SettingsPage() {
                 onChange={setInviteRole}
                 options={["Admin", "Editor", "Developer", "Viewer"]}
               />
-
-              <div className="rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-800">
-                This adds a row to the current page only. Connect your user
-                management API to create an account and send a real invitation.
-              </div>
 
               <div className="flex justify-end gap-2 pt-2">
                 <button

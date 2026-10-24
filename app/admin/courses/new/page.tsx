@@ -10,7 +10,6 @@ import {
   Plus,
   GripVertical,
   ChevronDown,
-  UploadCloud,
   Trash2,
   CircleCheck,
   Play,
@@ -25,6 +24,7 @@ import {
 import { createCourseInDb } from "@/app/lib/db/courses";
 import { getAllUsers } from "@/app/lib/db/user";
 import { getAllCategories, type Category } from "@/app/lib/db/categories";
+import ImageUpload from "@/components/ImageUpload";
 
 type Lesson = [string, string];
 
@@ -151,7 +151,10 @@ export default function NewCoursePage() {
 
   const [level, setLevel] = useState("Beginner to advanced");
   const [language, setLanguage] = useState("English");
-  const [imageName, setImageName] = useState("");
+
+  // ImageKit states
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageFileId, setImageFileId] = useState("");
 
   const [sectionsList, setSectionsList] = useState<CourseSection[]>([]);
   const [activeSectionForLesson, setActiveSectionForLesson] = useState<
@@ -164,9 +167,7 @@ export default function NewCoursePage() {
   const [discount, setDiscount] = useState("0");
   const [discountEnd, setDiscountEnd] = useState("");
   const [instructor, setInstructor] = useState("");
-  const [tags, setTags] = useState([
- 
-  ]);
+  const [tags, setTags] = useState<string[]>([]);
   const [tag, setTag] = useState("");
   const [certificate, setCertificate] = useState(true);
   const [studentQA, setStudentQA] = useState(true);
@@ -177,7 +178,6 @@ export default function NewCoursePage() {
     type: "success" | "error";
   } | null>(null);
 
-  // Fetch Instructors (where roleId or role is instructor) & Categories from DB
   useEffect(() => {
     async function loadDbData() {
       try {
@@ -209,7 +209,6 @@ export default function NewCoursePage() {
     loadDbData();
   }, []);
 
-  // Auto-generate slug when title changes
   function handleTitleChange(val: string) {
     setTitle(val);
     const generatedSlug = val
@@ -341,6 +340,8 @@ export default function NewCoursePage() {
         tags,
         certificate,
         studentQA,
+        imageUrl,
+        imageFileId,
         sections: sanitizedSections,
       });
 
@@ -373,7 +374,6 @@ export default function NewCoursePage() {
       )}
 
       <div className="mx-auto max-w-[1600px]">
-        {/* Breadcrumb */}
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <Link
             href="/admin/courses"
@@ -395,7 +395,6 @@ export default function NewCoursePage() {
           </div>
         </div>
 
-        {/* Page header */}
         <PageHeader
           title="New course"
           description="Create your course, organize lessons, and configure publishing settings."
@@ -443,11 +442,8 @@ export default function NewCoursePage() {
           }
         />
 
-        {/* Editor layout */}
         <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-          {/* Main column */}
           <div className="min-w-0 space-y-6">
-            {/* Basic information */}
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="mb-6 flex items-start gap-3">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-bold text-indigo-600">
@@ -553,7 +549,6 @@ export default function NewCoursePage() {
               </div>
             </section>
 
-            {/* Curriculum */}
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                 <div className="flex items-start gap-3">
@@ -759,7 +754,6 @@ export default function NewCoursePage() {
               )}
             </section>
 
-            {/* Pricing */}
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="mb-6 flex items-start gap-3">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-bold text-indigo-600">
@@ -823,7 +817,6 @@ export default function NewCoursePage() {
             </section>
           </div>
 
-          {/* Sidebar */}
           <aside className="min-w-0 space-y-6 xl:sticky xl:top-6">
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <h2 className="font-semibold text-gray-900">Publish checklist</h2>
@@ -869,40 +862,19 @@ export default function NewCoursePage() {
               </div>
             </section>
 
-            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-              <h2 className="font-semibold text-gray-900">Cover image</h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Choose a high-quality image to represent your course.
-              </p>
-
-              <label className="mt-4 flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center transition hover:border-indigo-400 hover:bg-indigo-50/50">
-                <UploadCloud size={27} className="mb-3 text-gray-400" />
-                <strong className="max-w-full break-words text-sm font-medium text-gray-700">
-                  {imageName || "Drop an image or browse"}
-                </strong>
-                <span className="mt-2 text-xs text-gray-400">
-                  1280 × 720 px · JPG or PNG · Under 2 MB
-                </span>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg"
-                  className="sr-only"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    if (file.size > 2 * 1024 * 1024) {
-                      setToast({
-                        message: "Please select an image smaller than 2 MB.",
-                        type: "error",
-                      });
-                      e.target.value = "";
-                      return;
-                    }
-                    setImageName(file.name);
-                  }}
-                />
-              </label>
-            </section>
+            <ImageUpload
+              folder="/courses"
+              value={imageUrl}
+              fileId={imageFileId}
+              onChange={(url, newFileId) => {
+                setImageUrl(url);
+                setImageFileId(newFileId);
+              }}
+              onRemove={() => {
+                setImageUrl("");
+                setImageFileId("");
+              }}
+            />
 
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <h2 className="mb-5 font-semibold text-gray-900">Settings</h2>

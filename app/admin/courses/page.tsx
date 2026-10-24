@@ -30,6 +30,8 @@ type Course = {
   students: number;
   rating: string;
   status: CourseStatus;
+  imageUrl?: string;
+  imageFileId?: string;
 };
 
 const statusStyles: Record<CourseStatus, string> = {
@@ -38,7 +40,6 @@ const statusStyles: Record<CourseStatus, string> = {
   Draft: "bg-slate-100 text-slate-600 ring-slate-500/20",
 };
 
-// Toast Notification Component
 function Toast({
   message,
   type,
@@ -107,23 +108,16 @@ export default function CoursesPage() {
     }
   }
 
-  // UI-rich SweetAlert2 delete confirmation
   async function handleDelete(course: Course) {
     const result = await Swal.fire({
       title: "Are you sure?",
       text: `You won't be able to revert the deletion of "${course.title}"!`,
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#7c3aed", // Violet-600 matching your theme
-      cancelButtonColor: "#cbd5e1", // Slate-300
+      confirmButtonColor: "#7c3aed",
+      cancelButtonColor: "#cbd5e1",
       confirmButtonText: "Yes, delete it!",
       cancelButtonText: "Cancel",
-      customClass: {
-        popup: "rounded-2xl",
-        confirmButton: "rounded-xl px-4 py-2.5 text-sm font-semibold shadow-sm",
-        cancelButton:
-          "rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm",
-      },
     });
 
     if (result.isConfirmed) {
@@ -373,9 +367,17 @@ export default function CoursesPage() {
                 >
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-xs font-bold text-violet-700">
-                        {course.initials}
-                      </span>
+                      {course.imageUrl ? (
+                        <img
+                          src={course.imageUrl}
+                          alt={course.title}
+                          className="h-11 w-11 shrink-0 rounded-xl object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-xs font-bold text-violet-700">
+                          {course.initials}
+                        </span>
+                      )}
                       <div>
                         <p className="max-w-xs text-sm font-semibold text-slate-800">
                           {course.title}

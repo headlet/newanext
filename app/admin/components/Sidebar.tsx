@@ -61,7 +61,10 @@ const NAVIGATION = [
   },
   {
     title: "SYSTEM",
-    items: [{ name: "Settings", href: "/admin/settings", icon: Settings }],
+    items: [
+      { name: "Settings", href: "/admin/settings", icon: Settings },
+      { name: "About", href: "/admin/about", icon: Globe },
+    ],
   },
 ];
 

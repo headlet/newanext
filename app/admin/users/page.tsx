@@ -31,6 +31,10 @@ import {
   Edit3,
   Eye,
   AlertCircle,
+  Phone,
+  Briefcase,
+  Shield,
+  FileText,
 } from "lucide-react";
 import {
   getAllUsers,
@@ -56,6 +60,7 @@ type SystemUser = {
   roleId?: string;
   roleName?: string;
   initials: string;
+  photoURL?: string;
   courses: number;
   progress: number;
   status: UserStatus;
@@ -248,7 +253,6 @@ export default function UsersPage() {
   const currentAuthUser = getAuth(getFirebaseApp()).currentUser;
   const pageSize = 5;
 
-  // Helper check for Super Admin environment email authorization
   const excludedEnv =
     process.env.NEXT_PUBLIC_ADMIN_EMAILS ||
     process.env.NEXT_PUBLIC_EXCLUDED_EMAILS ||
@@ -284,7 +288,7 @@ export default function UsersPage() {
             userEmail === currentAuthUser?.email?.trim().toLowerCase();
           const isExcludedEnv = superAdminEmails.includes(userEmail);
 
-          return !isCurrentAuthUser && !isExcludedEnv; // Hides them from list[cite: 3]
+          return !isCurrentAuthUser && !isExcludedEnv;
         });
 
         const mappedUsers: SystemUser[] = filteredList.map((user: any) => {
@@ -313,12 +317,13 @@ export default function UsersPage() {
             email: user.email || "No email",
             phone: user.phone || "",
             jobTitle: user.jobTitle || "",
-            about: user.about || "",
+            about: user.bio || user.about || "",
             roleId: matchedRole
               ? matchedRole.id
               : user.roleId || user.role || "",
             roleName: matchedRole ? matchedRole.name : user.role || "User",
             initials,
+            photoURL: user.photoURL || "",
             courses: user.courses || 2,
             progress: user.progress || 65,
             status: user.status || "Active",
@@ -378,9 +383,10 @@ export default function UsersPage() {
     setPage(1);
   }
 
-  // Handle Edit Action with Protection
   function handleOpenEdit(user: SystemUser) {
-    const isAdminRole = user.roleName?.toLowerCase() === "admin" || user.roleId?.toLowerCase() === "admin";
+    const isAdminRole =
+      user.roleName?.toLowerCase() === "admin" ||
+      user.roleId?.toLowerCase() === "admin";
 
     if (isAdminRole && !isCurrentSuperAdmin) {
       Swal.fire({
@@ -394,9 +400,10 @@ export default function UsersPage() {
     setEditingUser(user);
   }
 
-  // Handle Delete Action with Protection
   async function handleDelete(user: SystemUser) {
-    const isAdminRole = user.roleName?.toLowerCase() === "admin" || user.roleId?.toLowerCase() === "admin";
+    const isAdminRole =
+      user.roleName?.toLowerCase() === "admin" ||
+      user.roleId?.toLowerCase() === "admin";
 
     if (isAdminRole && !isCurrentSuperAdmin) {
       Swal.fire({
@@ -429,7 +436,7 @@ export default function UsersPage() {
       if (selectedId === user.id) {
         setSelectedId(null);
       }
-      
+
       Swal.fire({
         icon: "success",
         title: "Deleted!",
@@ -477,7 +484,7 @@ export default function UsersPage() {
       email: editingUser.email,
       phone: editingUser.phone || "",
       jobTitle: editingUser.jobTitle || "",
-      about: editingUser.about || "",
+      bio: editingUser.about || "",
       roleId: editingUser.roleId || "",
       role: resolvedRoleName,
       status: editingUser.status,
@@ -616,7 +623,7 @@ export default function UsersPage() {
 
       {/* Main content grid */}
       <section
-        className={`grid grid-cols-1 items-start gap-6 transition-all ${selectedId ? "2xl:grid-cols-[minmax(0,1fr)_370px]" : "grid-cols-1"}`}
+        className={`grid grid-cols-1 items-start gap-6 transition-all ${selectedId ? "2xl:grid-cols-[minmax(0,1fr)_420px]" : "grid-cols-1"}`}
       >
         {/* User table */}
         <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
@@ -700,7 +707,9 @@ export default function UsersPage() {
 
               <tbody className="divide-y divide-slate-100">
                 {pageUsers.map((user) => {
-                  const isAdminRole = user.roleName?.toLowerCase() === "admin" || user.roleId?.toLowerCase() === "admin";
+                  const isAdminRole =
+                    user.roleName?.toLowerCase() === "admin" ||
+                    user.roleId?.toLowerCase() === "admin";
                   const blockAdminAction = isAdminRole && !isCurrentSuperAdmin;
 
                   return (
@@ -715,9 +724,17 @@ export default function UsersPage() {
                     >
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-xs font-bold text-indigo-700">
-                            {user.initials}
-                          </span>
+                          {user.photoURL ? (
+                            <img
+                              src={user.photoURL}
+                              alt={user.name}
+                              className="h-10 w-10 shrink-0 rounded-xl object-cover shadow-sm"
+                            />
+                          ) : (
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-xs font-bold text-indigo-700">
+                              {user.initials}
+                            </span>
+                          )}
                           <span className="min-w-0">
                             <strong className="block truncate text-sm font-semibold text-slate-800">
                               {user.name}
@@ -763,10 +780,13 @@ export default function UsersPage() {
                           >
                             <Eye size={17} />
                           </button>
-                          {/* Dim/disable Edit button if non-super-admin tries to edit an admin */}
                           <button
                             type="button"
-                            title={blockAdminAction ? "Admins cannot be edited" : "Edit User"}
+                            title={
+                              blockAdminAction
+                                ? "Admins cannot be edited"
+                                : "Edit User"
+                            }
                             disabled={blockAdminAction}
                             onClick={() => handleOpenEdit(user)}
                             className={`rounded-lg p-2 transition ${
@@ -777,10 +797,13 @@ export default function UsersPage() {
                           >
                             <Edit3 size={17} />
                           </button>
-                          {/* Dim/disable Delete button if non-super-admin tries to delete an admin */}
                           <button
                             type="button"
-                            title={blockAdminAction ? "Admins cannot be deleted" : "Delete User"}
+                            title={
+                              blockAdminAction
+                                ? "Admins cannot be deleted"
+                                : "Delete User"
+                            }
                             disabled={blockAdminAction}
                             onClick={() => handleDelete(user)}
                             className={`rounded-lg p-2 transition ${
@@ -844,10 +867,11 @@ export default function UsersPage() {
           </div>
         </div>
 
-        {/* User profile sidebar */}
+        {/* User profile sidebar without clipping */}
         {selected ? (
-          <aside className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm 2xl:sticky 2xl:top-6">
-            <div className="relative h-28 overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-500 p-4">
+          <aside className="rounded-2xl border border-slate-200/80 bg-white shadow-sm 2xl:sticky 2xl:top-6 overflow-hidden">
+            {/* Banner Section */}
+            <div className="relative h-28 bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-500 p-4">
               <button
                 type="button"
                 onClick={() => setSelectedId(null)}
@@ -855,88 +879,165 @@ export default function UsersPage() {
               >
                 <X size={16} />
               </button>
-              <div className="absolute -bottom-7 left-5 flex h-[68px] w-[68px] items-center justify-center rounded-2xl border-4 border-white bg-indigo-50 text-xl font-bold text-indigo-700 shadow-sm">
-                {selected.initials}
-              </div>
             </div>
 
-            <div className="p-5 pt-11 space-y-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <h2 className="break-words text-lg font-bold text-slate-900">
-                    {selected.name}
-                  </h2>
-                  <p className="mt-0.5 break-all text-xs text-slate-500">
-                    {selected.email}
-                  </p>
-                  <div className="mt-1 flex items-center gap-2">
-                    {selected.jobTitle && (
-                      <span className="text-xs font-semibold text-indigo-600">
-                        {selected.jobTitle}
-                      </span>
-                    )}
-                    <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
-                      {selected.roleName || "User"}
+            {/* Profile Avatar Overlay Container */}
+            <div className="px-6 pb-6 pt-0 relative">
+              <div className="relative -mt-12 mb-3 flex items-end justify-between">
+                <div className="relative z-10 shrink-0">
+                  {selected.photoURL ? (
+                    <img
+                      src={selected.photoURL}
+                      alt={selected.name}
+                      className="h-24 w-24 rounded-2xl border-4 border-white bg-white object-cover shadow-md"
+                    />
+                  ) : (
+                    <div className="flex h-24 w-24 items-center justify-center rounded-2xl border-4 border-white bg-indigo-100 text-2xl font-bold text-indigo-700 shadow-md">
+                      {selected.initials}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mb-1">
+                  <Status status={selected.status} />
+                </div>
+              </div>
+
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">
+                  {selected.name}
+                </h2>
+                <p className="text-xs text-slate-500 break-all">
+                  {selected.email}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+                    {selected.roleName || "User"}
+                  </span>
+                  {selected.jobTitle && (
+                    <span className="inline-flex items-center gap-1 text-xs text-slate-600 font-medium">
+                      <Briefcase size={13} className="text-slate-400" />
+                      {selected.jobTitle}
                     </span>
-                  </div>
+                  )}
                 </div>
-                <Status status={selected.status} />
               </div>
 
-              {selected.about && (
-                <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
-                  <span className="font-semibold text-slate-700 block mb-1">
-                    About:
-                  </span>
-                  {selected.about}
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500 border-t border-slate-100 pt-3">
-                {selected.phone && (
-                  <span className="inline-flex items-center gap-1.5">
-                    📞 {selected.phone}
-                  </span>
-                )}
-                <span className="inline-flex items-center gap-1.5">
-                  <CalendarDays size={14} /> Joined: {selected.joined}
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <MapPin size={14} /> {selected.location}
-                </span>
+              {/* Bio / About Section */}
+              <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-3.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                  About User
+                </p>
+                <p className="text-xs leading-relaxed text-slate-600">
+                  {selected.about ||
+                    "No additional bio or details provided for this user account."}
+                </p>
               </div>
 
-              <div className="flex gap-2 pt-2">
+              {/* Contact Information */}
+              <div className="mt-4 space-y-2.5 border-t border-slate-100 pt-4 text-xs text-slate-600">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 flex items-center gap-1.5">
+                    <Phone size={14} /> Phone
+                  </span>
+                  <span className="font-medium text-slate-800">
+                    {selected.phone || "Not provided"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 flex items-center gap-1.5">
+                    <MapPin size={14} /> Location
+                  </span>
+                  <span className="font-medium text-slate-800">
+                    {selected.location}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 flex items-center gap-1.5">
+                    <CalendarDays size={14} /> Joined Date
+                  </span>
+                  <span className="font-medium text-slate-800">
+                    {selected.joined}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 flex items-center gap-1.5">
+                    <BookOpen size={14} /> Enrolled Courses
+                  </span>
+                  <span className="font-medium text-slate-800">
+                    {selected.courses} courses
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 flex items-center gap-1.5">
+                    <Award size={14} /> Certificates Earned
+                  </span>
+                  <span className="font-medium text-slate-800">
+                    {selected.certificates} certificates
+                  </span>
+                </div>
+              </div>
+
+              {/* Course Progress Section */}
+              <div className="mt-4 rounded-xl border border-slate-100 p-3.5 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-700">
+                    Overall Course Progress
+                  </span>
+                  <span className="font-bold text-indigo-600">
+                    {selected.progress}%
+                  </span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-indigo-600 transition-all"
+                    style={{ width: `${selected.progress}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-5 flex gap-2 pt-2">
                 <Button
                   variant="secondary"
-                  disabled={(selected.roleName?.toLowerCase() === "admin" || selected.roleId?.toLowerCase() === "admin") && !isCurrentSuperAdmin}
+                  disabled={
+                    (selected.roleName?.toLowerCase() === "admin" ||
+                      selected.roleId?.toLowerCase() === "admin") &&
+                    !isCurrentSuperAdmin
+                  }
                   onClick={() => handleOpenEdit(selected)}
                 >
                   <Edit3 size={15} /> Edit
                 </Button>
                 <Button
                   variant="danger"
-                  disabled={(selected.roleName?.toLowerCase() === "admin" || selected.roleId?.toLowerCase() === "admin") && !isCurrentSuperAdmin}
+                  disabled={
+                    (selected.roleName?.toLowerCase() === "admin" ||
+                      selected.roleId?.toLowerCase() === "admin") &&
+                    !isCurrentSuperAdmin
+                  }
                   onClick={() => handleDelete(selected)}
                 >
                   <Trash2 size={15} /> Delete
                 </Button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => toggleSuspension(selected)}
-                className={`flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition ${
-                  selected.status === "Suspended"
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                    : "border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
-                }`}
-              >
-                <ShieldAlert size={16} />
-                {selected.status === "Suspended"
-                  ? "Reactivate account"
-                  : "Suspend account"}
-              </button>
+              <div className="mt-2.5">
+                <button
+                  type="button"
+                  onClick={() => toggleSuspension(selected)}
+                  className={`flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
+                    selected.status === "Suspended"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                      : "border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
+                  }`}
+                >
+                  <ShieldAlert size={16} />
+                  {selected.status === "Suspended"
+                    ? "Reactivate account"
+                    : "Suspend account"}
+                </button>
+              </div>
             </div>
           </aside>
         ) : null}

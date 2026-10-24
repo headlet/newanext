@@ -5,12 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
-  Eye,
   Save,
   Plus,
   GripVertical,
   ChevronDown,
-  UploadCloud,
   Trash2,
   CircleCheck,
   Play,
@@ -22,9 +20,10 @@ import {
   AlertCircle,
   Check,
 } from "lucide-react";
-import { fetchCourseById, updateCourseInDb } from "@/app/lib/db/courses"; // Updated correct function names
+import { fetchCourseById, updateCourseInDb } from "@/app/lib/db/courses";
 import { getAllUsers } from "@/app/lib/db/user";
 import { getAllCategories, type Category } from "@/app/lib/db/categories";
+import ImageUpload from "@/components/ImageUpload";
 
 type Lesson = [string, string];
 
@@ -153,7 +152,10 @@ export default function EditCoursePage() {
 
   const [level, setLevel] = useState("Beginner to advanced");
   const [language, setLanguage] = useState("English");
-  const [imageName, setImageName] = useState("");
+
+  // ImageKit states
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageFileId, setImageFileId] = useState("");
 
   const [sectionsList, setSectionsList] = useState<CourseSection[]>([]);
   const [activeSectionForLesson, setActiveSectionForLesson] = useState<
@@ -178,7 +180,6 @@ export default function EditCoursePage() {
     type: "success" | "error";
   } | null>(null);
 
-  // Fetch Course details, Instructors, and Categories on mount
   useEffect(() => {
     async function initData() {
       try {
@@ -186,7 +187,7 @@ export default function EditCoursePage() {
         const [users, cats, courseData] = await Promise.all([
           getAllUsers(),
           getAllCategories(),
-          fetchCourseById(courseId), // Updated function call
+          fetchCourseById(courseId),
         ]);
 
         const filteredInstructors = users.filter((u: any) => {
@@ -216,6 +217,8 @@ export default function EditCoursePage() {
           setTags(courseData.tags || []);
           setCertificate(courseData.certificate ?? true);
           setStudentQA(courseData.studentQA ?? true);
+          setImageUrl(courseData.imageUrl || "");
+          setImageFileId(courseData.imageFileId || "");
 
           if (Array.isArray(courseData.sections)) {
             const mappedSections = courseData.sections.map((sec: any) => ({
@@ -243,7 +246,6 @@ export default function EditCoursePage() {
     }
   }, [courseId]);
 
-  // Auto-generate slug when title changes
   function handleTitleChange(val: string) {
     setTitle(val);
     const generatedSlug = val
@@ -375,6 +377,8 @@ export default function EditCoursePage() {
         tags,
         certificate,
         studentQA,
+        imageUrl,
+        imageFileId,
         sections: sanitizedSections,
       });
 
@@ -415,7 +419,6 @@ export default function EditCoursePage() {
       )}
 
       <div className="mx-auto max-w-[1600px]">
-        {/* Breadcrumb */}
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <Link
             href="/admin/courses"
@@ -437,7 +440,6 @@ export default function EditCoursePage() {
           </div>
         </div>
 
-        {/* Page header */}
         <PageHeader
           title="Edit course"
           description="Update your course details, curriculum, pricing, and settings."
@@ -471,11 +473,8 @@ export default function EditCoursePage() {
           }
         />
 
-        {/* Editor layout */}
         <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-          {/* Main column */}
           <div className="min-w-0 space-y-6">
-            {/* Basic information */}
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="mb-6 flex items-start gap-3">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-bold text-indigo-600">
@@ -581,7 +580,6 @@ export default function EditCoursePage() {
               </div>
             </section>
 
-            {/* Curriculum */}
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                 <div className="flex items-start gap-3">
@@ -783,7 +781,6 @@ export default function EditCoursePage() {
               )}
             </section>
 
-            {/* Pricing */}
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="mb-6 flex items-start gap-3">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-bold text-indigo-600">
@@ -833,7 +830,6 @@ export default function EditCoursePage() {
             </section>
           </div>
 
-          {/* Sidebar */}
           <aside className="min-w-0 space-y-6 xl:sticky xl:top-6">
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <h2 className="font-semibold text-gray-900">Publish checklist</h2>
@@ -874,6 +870,20 @@ export default function EditCoursePage() {
                 ))}
               </div>
             </section>
+
+            <ImageUpload
+              folder="/courses"
+              value={imageUrl}
+              fileId={imageFileId}
+              onChange={(url, newFileId) => {
+                setImageUrl(url);
+                setImageFileId(newFileId);
+              }}
+              onRemove={() => {
+                setImageUrl("");
+                setImageFileId("");
+              }}
+            />
 
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <h2 className="mb-5 font-semibold text-gray-900">Settings</h2>

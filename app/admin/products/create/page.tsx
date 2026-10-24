@@ -8,13 +8,12 @@ import {
   ArrowLeft,
   Save,
   Package,
-  ImagePlus,
-  X,
   CircleDollarSign,
   Boxes,
 } from "lucide-react";
 import { createProductInDb } from "@/app/lib/db/products";
 import { getAllCategories, type Category } from "@/app/lib/db/categories";
+import ImageUpload from "@/components/ImageUpload"; // ImageKit Component
 
 const Toast = Swal.mixin({
   toast: true,
@@ -44,8 +43,11 @@ export default function CreateProductPage() {
   const [comparePrice, setComparePrice] = useState("");
   const [stock, setStock] = useState("0");
   const [status, setStatus] = useState("Draft");
-  const [image, setImage] = useState("");
-  const [imageName, setImageName] = useState("");
+
+  // ImageKit states
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageFileId, setImageFileId] = useState("");
+
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -74,23 +76,6 @@ export default function CreateProductPage() {
     setSlug(generatedSlug);
   }
 
-  function handleImage(file?: File) {
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      Toast.fire({ icon: "error", title: "Please select a valid image file." });
-      return;
-    }
-
-    if (file.size > 3 * 1024 * 1024) {
-      Toast.fire({ icon: "error", title: "Image size must be smaller than 3 MB." });
-      return;
-    }
-
-    setImage(URL.createObjectURL(file));
-    setImageName(file.name);
-  }
-
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
@@ -99,12 +84,18 @@ export default function CreateProductPage() {
     const numericStock = Number(stock);
 
     if (!Number.isFinite(numericPrice) || numericPrice < 0) {
-      Toast.fire({ icon: "error", title: "Please enter a valid product price." });
+      Toast.fire({
+        icon: "error",
+        title: "Please enter a valid product price.",
+      });
       return;
     }
 
     if (!Number.isInteger(numericStock) || numericStock < 0) {
-      Toast.fire({ icon: "error", title: "Stock must be a non-negative whole number." });
+      Toast.fire({
+        icon: "error",
+        title: "Stock must be a non-negative whole number.",
+      });
       return;
     }
 
@@ -118,8 +109,9 @@ export default function CreateProductPage() {
       comparePrice: comparePrice ? numericComparePrice : null,
       stock: numericStock,
       status,
-      image,
-      imageName,
+      imageUrl,
+      imageFileId,
+      imageFolder: "/products",
     };
 
     setSaving(true);
@@ -131,7 +123,10 @@ export default function CreateProductPage() {
       }, 1000);
     } catch (error) {
       console.error("Failed to create product:", error);
-      Toast.fire({ icon: "error", title: "Failed to save product to database." });
+      Toast.fire({
+        icon: "error",
+        title: "Failed to save product to database.",
+      });
       setSaving(false);
     }
   }
@@ -308,56 +303,19 @@ export default function CreateProductPage() {
             </div>
 
             <div className="space-y-6">
-              <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                <h2 className="font-semibold text-gray-900">Product image</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Upload a clear image of the product.
-                </p>
-
-                <label className="mt-4 flex min-h-44 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4 text-center hover:border-indigo-400 hover:bg-indigo-50/40">
-                  {image ? (
-                    <img
-                      src={image}
-                      alt="Product preview"
-                      className="h-40 w-full rounded-md object-cover"
-                    />
-                  ) : (
-                    <>
-                      <ImagePlus size={32} className="text-gray-400" />
-                      <span className="mt-3 text-sm font-medium text-gray-700">
-                        Click to upload
-                      </span>
-                    </>
-                  )}
-
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="sr-only"
-                    onChange={(e) => {
-                      handleImage(e.target.files?.[0]);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-
-                {imageName && (
-                  <div className="mt-3 flex items-center justify-between gap-2 text-xs text-gray-500">
-                    <span className="truncate">{imageName}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setImage("");
-                        setImageName("");
-                      }}
-                      className="inline-flex shrink-0 items-center gap-1 text-red-600 hover:text-red-700"
-                    >
-                      <X size={13} />
-                      Remove
-                    </button>
-                  </div>
-                )}
-              </section>
+              <ImageUpload
+                folder="/products"
+                value={imageUrl}
+                fileId={imageFileId}
+                onChange={(url, newFileId) => {
+                  setImageUrl(url);
+                  setImageFileId(newFileId);
+                }}
+                onRemove={() => {
+                  setImageUrl("");
+                  setImageFileId("");
+                }}
+              />
 
               <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                 <h2 className="font-semibold text-gray-900">

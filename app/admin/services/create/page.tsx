@@ -9,8 +9,6 @@ import {
   Save,
   Eye,
   Code2,
-  ImagePlus,
-  X,
   Plus,
   Layers,
   Palette,
@@ -19,8 +17,10 @@ import {
   Cloud,
   Megaphone,
   Loader2,
+  X,
 } from "lucide-react";
 import { getService, saveService } from "@/app/lib/db/service";
+import ImageUpload from "@/components/ImageUpload"; // ImageKit Component
 
 const inputClass =
   "w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100";
@@ -58,8 +58,11 @@ export default function CreateServicePage() {
   const [status, setStatus] = useState("Draft");
   const [features, setFeatures] = useState<string[]>([]);
   const [featureInput, setFeatureInput] = useState("");
-  const [image, setImage] = useState("");
-  const [imageName, setImageName] = useState("");
+
+  // ImageKit states
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageFileId, setImageFileId] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -85,8 +88,8 @@ export default function CreateServicePage() {
         setPricingType(service.pricingType || "Starting at");
         setStatus(service.status || "Draft");
         setFeatures(service.features || []);
-        setImage(service.image || "");
-        setImageName(service.imageName || "");
+        setImageUrl(service.imageUrl || service.image || "");
+        setImageFileId(service.imageFileId || "");
       } else {
         Toast.fire({
           icon: "error",
@@ -115,29 +118,6 @@ export default function CreateServicePage() {
       setFeatures((current) => [...current, value]);
       setFeatureInput("");
     }
-  }
-
-  function handleImage(file?: File) {
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      Toast.fire({
-        icon: "warning",
-        title: "Please select an image file.",
-      });
-      return;
-    }
-
-    if (file.size > 3 * 1024 * 1024) {
-      Toast.fire({
-        icon: "warning",
-        title: "Please select an image smaller than 3 MB.",
-      });
-      return;
-    }
-
-    setImage(URL.createObjectURL(file));
-    setImageName(file.name);
   }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
@@ -170,8 +150,8 @@ export default function CreateServicePage() {
       pricingType: pricingType as "Starting at" | "Fixed" | "Custom",
       status: status as "Published" | "Draft",
       features,
-      image,
-      imageName,
+      imageUrl,
+      imageFileId,
       icon: iconKey,
     };
 
@@ -402,58 +382,19 @@ export default function CreateServicePage() {
             </div>
 
             <div className="space-y-6">
-              <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                <h2 className="font-semibold text-gray-900">Service image</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Choose an image to represent this service.
-                </p>
-
-                <label className="mt-4 flex min-h-44 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4 text-center hover:border-indigo-400 hover:bg-indigo-50/40">
-                  {image ? (
-                    <img
-                      src={image}
-                      alt="Service preview"
-                      className="h-40 w-full rounded-md object-cover"
-                    />
-                  ) : (
-                    <>
-                      <ImagePlus size={32} className="text-gray-400" />
-                      <span className="mt-3 text-sm font-medium text-gray-700">
-                        Click to upload image
-                      </span>
-                      <span className="mt-1 text-xs text-gray-400">
-                        PNG, JPG or WebP · Max 3 MB
-                      </span>
-                    </>
-                  )}
-
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="sr-only"
-                    onChange={(e) => {
-                      handleImage(e.target.files?.[0]);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-
-                {imageName && (
-                  <div className="mt-3 flex items-center justify-between gap-2 text-xs text-gray-500">
-                    <span className="truncate">{imageName}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setImage("");
-                        setImageName("");
-                      }}
-                      className="shrink-0 text-red-600 hover:text-red-700"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                )}
-              </section>
+              <ImageUpload
+                folder="/service"
+                value={imageUrl}
+                fileId={imageFileId}
+                onChange={(url, newFileId) => {
+                  setImageUrl(url);
+                  setImageFileId(newFileId);
+                }}
+                onRemove={() => {
+                  setImageUrl("");
+                  setImageFileId("");
+                }}
+              />
 
               <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                 <h2 className="font-semibold text-gray-900">

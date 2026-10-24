@@ -10,31 +10,21 @@ import {
 import {
   UserRound,
   ShieldCheck,
-  Bell,
-  Palette,
-  Camera,
-  LockKeyhole,
-  Eye,
-  EyeOff,
-  Check,
-  ChevronRight,
-  Mail,
-  Phone,
-  BriefcaseBusiness,
-  Globe,
-  Clock,
   Monitor,
   Smartphone,
   LogOut,
-  KeyRound,
-  ShieldAlert,
   Save,
   LoaderCircle,
-  Upload,
   CheckCircle2,
-  Info,
-  Trash2,
-  X,
+  BriefcaseBusiness,
+  Mail,
+  Phone,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  LockKeyhole,
+  Camera,
+  Loader2,
 } from "lucide-react";
 import {
   onAuthStateChanged,
@@ -43,11 +33,10 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential,
 } from "firebase/auth";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getFirebaseAuth } from "@/app/lib/firebase";
 import { getUserProfile, saveUserProfile } from "@/app/lib/db/user";
 
-type TabId = "profile" | "security" | "notifications" | "preferences";
+type TabId = "profile" | "security";
 
 const tabs: {
   id: TabId;
@@ -69,58 +58,20 @@ const tabs: {
   },
 ];
 
-const initialNotifications = [
-  {
-    id: "email",
-    title: "Email notifications",
-    description: "Receive important updates by email.",
-    enabled: true,
-  },
-  {
-    id: "security",
-    title: "Security alerts",
-    description: "Get notified about sign-ins and security changes.",
-    enabled: true,
-  },
-  {
-    id: "product",
-    title: "Product updates",
-    description: "Discover new features and improvements.",
-    enabled: false,
-  },
-  {
-    id: "marketing",
-    title: "Tips and announcements",
-    description: "Receive occasional tips to improve your workflow.",
-    enabled: false,
-  },
-];
+type ImageKitAuth = {
+  token: string;
+  expire: number;
+  signature: string;
+  publicKey: string;
+};
 
-function Toggle({
-  checked,
-  onChange,
-}: {
-  checked: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-4 focus:ring-indigo-100 ${
-        checked ? "bg-indigo-600" : "bg-slate-300"
-      }`}
-    >
-      <span
-        className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-          checked ? "translate-x-6" : "translate-x-1"
-        }`}
-      />
-    </button>
-  );
-}
+type ImageKitUploadResult = {
+  url?: string;
+  fileId?: string;
+  message?: string;
+};
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 function SectionHeading({
   title,
@@ -274,7 +225,7 @@ export default function ProfileSettingsPage() {
 
   const [loadingUser, setLoadingUser] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [currentUserUid, setCurrentUserUid] = useState<string | null>(null);
 
   const [profile, setProfile] = useState({
@@ -286,7 +237,8 @@ export default function ProfileSettingsPage() {
     bio: "",
   });
 
-  const [avatar, setAvatar] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageFileId, setImageFileId] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [passwords, setPasswords] = useState({
@@ -299,15 +251,6 @@ export default function ProfileSettingsPage() {
     current: false,
     next: false,
     confirm: false,
-  });
-
-  const [twoFactor, setTwoFactor] = useState(false);
-  const [notifications, setNotifications] = useState(initialNotifications);
-
-  const [preferences, setPreferences] = useState({
-    language: "en",
-    timezone: "Asia/Kathmandu",
-    theme: "light",
   });
 
   const [sessions, setSessions] = useState([
@@ -368,16 +311,18 @@ export default function ProfileSettingsPage() {
           });
 
           if (userProfile?.photoURL) {
-            setAvatar(userProfile.photoURL);
+            setImageUrl(userProfile.photoURL);
+            setImageFileId(userProfile.imageFileId || "");
           } else if (user.photoURL) {
-            setAvatar(user.photoURL);
+            setImageUrl(user.photoURL);
           }
         } catch (error) {
           console.error("Error loading user profile:", error);
         }
       } else {
         setCurrentUserUid(null);
-        setAvatar("");
+        setImageUrl("");
+        setImageFileId("");
       }
 
       setLoadingUser(false);
@@ -390,14 +335,9 @@ export default function ProfileSettingsPage() {
     setProfile((previous) => ({ ...previous, [key]: value }));
   }
 
-  // Upload image to Firebase Storage and save its URL.
-  async function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.target;
-    const file = input.files?.[0];
-
-    // Reset the input so the same file can be selected again.
-    input.value = "";
-
+  // Direct ImageKit Upload via banner camera button click
+  async function handleAvatarUpload(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
@@ -405,81 +345,68 @@ export default function ProfileSettingsPage() {
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      triggerToast("Image file size must be smaller than 2 MB.", "error");
+    if (file.size > MAX_FILE_SIZE) {
+      triggerToast("Image size must be 10 MB or less.", "error");
       return;
     }
 
-    const auth = getFirebaseAuth();
-    const user = auth.currentUser;
-
-    if (!user || !currentUserUid || user.uid !== currentUserUid) {
-      triggerToast("Please sign in again before uploading.", "error");
-      return;
-    }
-
-    setIsUploadingAvatar(true);
+    setIsUploading(true);
 
     try {
-      // 1. Upload the actual image file.
-      const storage = getStorage(auth.app);
-      const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-
-      const imageRef = ref(
-        storage,
-        `profile-photos/${user.uid}/${Date.now()}-${safeFileName}`,
-      );
-
-      await uploadBytes(imageRef, file, {
-        contentType: file.type,
+      const authResponse = await fetch("/api/upload-auth", {
+        method: "GET",
+        cache: "no-store",
       });
 
-      // 2. Get the hosted image URL.
-      const photoURL = await getDownloadURL(imageRef);
+      const authData = await authResponse.json().catch(() => ({}));
 
-      // 3. Update the preview only after Storage returns a valid URL.
-      setAvatar(photoURL);
-
-      // 4. Save the URL to Firestore.
-      try {
-        await saveUserProfile(user.uid, { photoURL });
-      } catch (error) {
-        console.error("Failed to save photo URL to Firestore:", error);
-        triggerToast(
-          "Image uploaded, but saving its URL to Firestore failed.",
-          "error",
+      if (!authResponse.ok) {
+        throw new Error(
+          authData.message || "Failed to authenticate ImageKit upload.",
         );
-        return;
       }
 
-      // 5. Synchronize the Firebase Auth profile.
-      try {
-        await updateAuthProfile(user, { photoURL });
-      } catch (error) {
-        console.error("Failed to update Firebase Auth photoURL:", error);
-        // Firestore already contains the URL, so the saved image can still load.
-      }
+      const auth = authData as ImageKitAuth;
 
-      triggerToast("Profile picture updated successfully!");
-    } catch (error: unknown) {
-      console.error("Profile image upload failed:", error);
+      const generatedFileName = `user-${Date.now()}.${file.name.split(".").pop() || "img"}`;
 
-      const firebaseError = error as {
-        code?: string;
-        message?: string;
-      };
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("fileName", generatedFileName);
+      formData.append("folder", "/user");
+      formData.append("useUniqueFileName", "true");
+      formData.append("token", auth.token);
+      formData.append("expire", String(auth.expire));
+      formData.append("signature", auth.signature);
+      formData.append("publicKey", auth.publicKey);
 
-      console.error("Firebase error code:", firebaseError.code);
-      console.error("Firebase error message:", firebaseError.message);
-
-      triggerToast(
-        `Image upload failed: ${
-          firebaseError.code || firebaseError.message || "Unknown error"
-        }`,
-        "error",
+      const uploadResponse = await fetch(
+        "https://upload.imagekit.io/api/v1/files/upload",
+        {
+          method: "POST",
+          body: formData,
+        },
       );
+
+      const uploadResult: ImageKitUploadResult = await uploadResponse
+        .json()
+        .catch(() => ({}));
+
+      if (!uploadResponse.ok || !uploadResult.url || !uploadResult.fileId) {
+        throw new Error(uploadResult.message || "Image upload failed.");
+      }
+
+      setImageUrl(uploadResult.url);
+      setImageFileId(uploadResult.fileId);
+      triggerToast(
+        "Profile picture uploaded successfully! Click save changes to apply.",
+      );
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      triggerToast(error.message || "Failed to upload image.", "error");
     } finally {
-      setIsUploadingAvatar(false);
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -501,7 +428,10 @@ export default function ProfileSettingsPage() {
       const fullName = `${profile.firstName.trim()} ${profile.lastName.trim()}`;
 
       if (user) {
-        await updateAuthProfile(user, { displayName: fullName });
+        await updateAuthProfile(user, {
+          displayName: fullName,
+          photoURL: imageUrl || null,
+        });
       }
 
       await saveUserProfile(currentUserUid, {
@@ -509,6 +439,9 @@ export default function ProfileSettingsPage() {
         phone: profile.phone,
         jobTitle: profile.jobTitle,
         bio: profile.bio,
+        photoURL: imageUrl,
+        imageFileId: imageFileId,
+        imageFolder: "/user",
       });
 
       triggerToast("Your profile has been updated successfully!");
@@ -549,14 +482,6 @@ export default function ProfileSettingsPage() {
       return;
     }
 
-    if (passwords.current === passwords.next) {
-      triggerToast(
-        "New password must be different from current password.",
-        "error",
-      );
-      return;
-    }
-
     setIsSaving(true);
 
     try {
@@ -564,7 +489,6 @@ export default function ProfileSettingsPage() {
         user.email,
         passwords.current,
       );
-
       await reauthenticateWithCredential(user, credential);
       await updatePassword(user, passwords.next);
 
@@ -572,31 +496,13 @@ export default function ProfileSettingsPage() {
       setPasswords({ current: "", next: "", confirm: "" });
     } catch (error: any) {
       console.error(error);
-
-      if (
-        error.code === "auth/wrong-password" ||
-        error.code === "auth/invalid-credential"
-      ) {
-        triggerToast("Incorrect current password.", "error");
-      } else {
-        triggerToast(
-          "Failed to update password. Please check your inputs.",
-          "error",
-        );
-      }
+      triggerToast(
+        "Failed to update password. Check current password.",
+        "error",
+      );
     } finally {
       setIsSaving(false);
     }
-  }
-
-  function handleNotificationSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    triggerToast("Notification preferences updated successfully!");
-  }
-
-  function handlePreferenceSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    triggerToast("Preferences saved successfully!");
   }
 
   function togglePasswordVisibility(key: keyof typeof visiblePasswords) {
@@ -609,16 +515,6 @@ export default function ProfileSettingsPage() {
   function revokeSession(id: number) {
     setSessions((previous) => previous.filter((session) => session.id !== id));
     triggerToast("Session revoked successfully.");
-  }
-
-  function disableTwoFactor() {
-    setTwoFactor(false);
-    triggerToast("Two-factor authentication disabled.");
-  }
-
-  function enableTwoFactor() {
-    setTwoFactor(true);
-    triggerToast("Two-factor authentication enabled successfully!");
   }
 
   if (loadingUser) {
@@ -666,68 +562,46 @@ export default function ProfileSettingsPage() {
               <span className="h-2 w-2 rounded-full bg-indigo-600" />
               Account management
             </div>
-
             <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
               My profile
             </h1>
-
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
               Manage your personal information, password, security, and account
               preferences.
             </p>
           </div>
-
-          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-              <ShieldCheck size={21} />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-slate-800">
-                Account settings
-              </p>
-              <p className="text-xs text-slate-500">Manage your account</p>
-            </div>
-          </div>
         </div>
 
-        {/* Profile overview */}
+        {/* Profile overview banner */}
         <section className="relative mb-7 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="h-32 bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-500 sm:h-40">
-            <div className="absolute right-0 top-0 h-52 w-52 translate-x-12 -translate-y-16 rounded-full border-[28px] border-white/10" />
-            <div className="absolute right-24 top-16 hidden h-24 w-24 rounded-full border border-white/20 sm:block" />
-          </div>
+          <div className="h-32 bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-500 sm:h-40" />
 
           <div className="relative flex flex-col gap-5 px-5 pb-6 sm:flex-row sm:items-end sm:px-8">
             <div className="-mt-12 flex items-end gap-4 sm:-mt-14">
               <div className="relative shrink-0">
-                {avatar ? (
+                {imageUrl ? (
                   <img
-                    src={avatar}
-                    alt="Profile preview"
+                    src={imageUrl}
+                    alt="Profile avatar"
                     className="h-24 w-24 rounded-2xl border-4 border-white bg-white object-cover shadow-md sm:h-28 sm:w-28"
                   />
                 ) : (
                   <div className="flex h-24 w-24 items-center justify-center rounded-2xl border-4 border-white bg-indigo-100 text-3xl font-bold text-indigo-700 shadow-md sm:h-28 sm:w-28">
-                    {profile.firstName.trim()
-                      ? profile.firstName.charAt(0).toUpperCase()
-                      : "U"}
-                    {profile.lastName.trim()
-                      ? profile.lastName.charAt(0).toUpperCase()
-                      : ""}
+                    {profile.firstName.charAt(0).toUpperCase() || "U"}
                   </div>
                 )}
 
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploadingAvatar}
-                  aria-label="Upload profile picture"
-                  className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-xl border-2 border-white bg-indigo-600 text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isUploading}
+                  className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md transition hover:bg-indigo-700 disabled:opacity-50"
+                  title="Upload new picture"
                 >
-                  {isUploadingAvatar ? (
-                    <LoaderCircle size={17} className="animate-spin" />
+                  {isUploading ? (
+                    <Loader2 size={16} className="animate-spin" />
                   ) : (
-                    <Camera size={17} />
+                    <Camera size={16} />
                   )}
                 </button>
 
@@ -735,7 +609,7 @@ export default function ProfileSettingsPage() {
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
-                  onChange={handleAvatarChange}
+                  onChange={handleAvatarUpload}
                   className="hidden"
                 />
               </div>
@@ -757,12 +631,6 @@ export default function ProfileSettingsPage() {
                   <CheckCircle2 size={13} />
                   Active User
                 </span>
-
-                {profile.jobTitle && (
-                  <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                    {profile.jobTitle}
-                  </span>
-                )}
               </div>
             </div>
 
@@ -837,27 +705,6 @@ export default function ProfileSettingsPage() {
                 );
               })}
             </nav>
-
-            <div className="mx-3 my-4 border-t border-slate-100" />
-
-            <div className="rounded-xl bg-slate-50 p-4">
-              <div className="mb-2 flex items-center gap-2 text-slate-700">
-                <ShieldCheck size={17} className="text-indigo-600" />
-                <span className="text-sm font-bold">Stay secure</span>
-              </div>
-
-              <p className="text-xs leading-5 text-slate-500">
-                Use a unique password and review your active sessions regularly.
-              </p>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab("security")}
-                className="mt-3 text-xs font-bold text-indigo-600 hover:text-indigo-800"
-              >
-                Review security →
-              </button>
-            </div>
           </aside>
 
           {/* Content */}
@@ -948,114 +795,55 @@ export default function ProfileSettingsPage() {
             )}
 
             {activeTab === "security" && (
-              <>
-                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-                  <SectionHeading
-                    title="Change password"
-                    description="Choose a strong password to help keep your account safe."
-                  />
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+                <SectionHeading
+                  title="Change password"
+                  description="Choose a strong password to help keep your account safe."
+                />
 
-                  <form onSubmit={handlePasswordSubmit}>
-                    <div className="space-y-5">
+                <form onSubmit={handlePasswordSubmit}>
+                  <div className="space-y-5">
+                    <PasswordField
+                      label="Current password"
+                      value={passwords.current}
+                      onChange={(v) =>
+                        setPasswords((p) => ({ ...p, current: v }))
+                      }
+                      visible={visiblePasswords.current}
+                      onToggle={() => togglePasswordVisibility("current")}
+                      placeholder="Enter current password"
+                    />
+
+                    <div className="grid gap-5 sm:grid-cols-2">
                       <PasswordField
-                        label="Current password"
-                        value={passwords.current}
+                        label="New password"
+                        value={passwords.next}
                         onChange={(v) =>
-                          setPasswords((p) => ({ ...p, current: v }))
+                          setPasswords((p) => ({ ...p, next: v }))
                         }
-                        visible={visiblePasswords.current}
-                        onToggle={() => togglePasswordVisibility("current")}
-                        placeholder="Enter current password"
+                        visible={visiblePasswords.next}
+                        onToggle={() => togglePasswordVisibility("next")}
+                        placeholder="Enter new password"
                       />
 
-                      <div className="grid gap-5 sm:grid-cols-2">
-                        <PasswordField
-                          label="New password"
-                          value={passwords.next}
-                          onChange={(v) =>
-                            setPasswords((p) => ({ ...p, next: v }))
-                          }
-                          visible={visiblePasswords.next}
-                          onToggle={() => togglePasswordVisibility("next")}
-                          placeholder="Enter new password"
-                        />
-
-                        <PasswordField
-                          label="Confirm new password"
-                          value={passwords.confirm}
-                          onChange={(v) =>
-                            setPasswords((p) => ({ ...p, confirm: v }))
-                          }
-                          visible={visiblePasswords.confirm}
-                          onToggle={() => togglePasswordVisibility("confirm")}
-                          placeholder="Re-enter new password"
-                        />
-                      </div>
+                      <PasswordField
+                        label="Confirm new password"
+                        value={passwords.confirm}
+                        onChange={(v) =>
+                          setPasswords((p) => ({ ...p, confirm: v }))
+                        }
+                        visible={visiblePasswords.confirm}
+                        onToggle={() => togglePasswordVisibility("confirm")}
+                        placeholder="Re-enter new password"
+                      />
                     </div>
-
-                    <div className="mt-7 flex justify-end border-t border-slate-100 pt-6">
-                      <SaveButton loading={isSaving}>
-                        Update password
-                      </SaveButton>
-                    </div>
-                  </form>
-                </section>
-
-                {/* Two-factor authentication section intentionally remains disabled. */}
-
-                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-                  <SectionHeading
-                    title="Active sessions"
-                    description="Review the active sessions for your account."
-                  />
-
-                  <div className="space-y-3">
-                    {sessions.map((session) => (
-                      <div
-                        key={session.id}
-                        className="flex flex-col gap-4 rounded-xl border border-slate-200 p-4 sm:flex-row sm:items-center"
-                      >
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-                          {session.device === "Mobile device" ? (
-                            <Smartphone size={21} />
-                          ) : (
-                            <Monitor size={21} />
-                          )}
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-bold text-slate-800">
-                              {session.name}
-                            </p>
-
-                            {session.current && (
-                              <span className="rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
-                                Current
-                              </span>
-                            )}
-                          </div>
-
-                          <p className="mt-1 text-xs text-slate-500">
-                            {session.device} · {session.location}
-                          </p>
-                        </div>
-
-                        {!session.current && (
-                          <button
-                            type="button"
-                            onClick={() => revokeSession(session.id)}
-                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-rose-100 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50"
-                          >
-                            <LogOut size={14} />
-                            Revoke
-                          </button>
-                        )}
-                      </div>
-                    ))}
                   </div>
-                </section>
-              </>
+
+                  <div className="mt-7 flex justify-end border-t border-slate-100 pt-6">
+                    <SaveButton loading={isSaving}>Update password</SaveButton>
+                  </div>
+                </form>
+              </section>
             )}
           </div>
         </div>

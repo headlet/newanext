@@ -161,7 +161,6 @@ export async function saveUserProfile(
       updatedData.imageFolder = data.imageFolder;
     }
   }
-
   await setDoc(userRef, updatedData, { merge: true });
 
   // Clean up previous image asset if replaced or removed

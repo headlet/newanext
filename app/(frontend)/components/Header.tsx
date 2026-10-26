@@ -74,7 +74,7 @@ const COURSE_CATEGORIES = [
     courses: [
       {
         name: "Full-Stack MERN course in Nepal",
-        href: "/courses/full-stack-mern",
+        href: "/mernstack",
       },
       { name: "Python Django course in Nepal", href: "/courses/python-django" },
       {

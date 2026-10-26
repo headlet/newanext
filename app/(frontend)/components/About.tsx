@@ -61,7 +61,7 @@ export default function About() {
           {/* Stat Block 1: Purple */}
           <div className="bg-white/90 backdrop-blur-xl rounded-3xl p-6 sm:p-8 border border-gray-200/80 shadow-lg flex flex-col justify-between group hover:border-purple-400 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-3xl">💻</span>
+              <span className="text-5xl">💻</span>
               <span className="text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-lg">
                 Delivered
               </span>
@@ -75,7 +75,7 @@ export default function About() {
           {/* Stat Block 2: Blue */}
           <div className="bg-white/90 backdrop-blur-xl rounded-3xl p-6 sm:p-8 border border-gray-200/80 shadow-lg flex flex-col justify-between group hover:border-blue-400 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-3xl">👥</span>
+              <span className="text-5xl">👥</span>
               <span className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg">
                 Clients
               </span>
@@ -89,7 +89,7 @@ export default function About() {
           {/* Stat Block 3: Emerald */}
           <div className="bg-white/90 backdrop-blur-xl rounded-3xl p-6 sm:p-8 border border-gray-200/80 shadow-lg flex flex-col justify-between group hover:border-emerald-400 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-3xl">🏆</span>
+              <span className="text-5xl">🏆</span>
               <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
                 Recognition
               </span>
@@ -103,7 +103,7 @@ export default function About() {
           {/* Stat Block 4: Rose */}
           <div className="bg-white/90 backdrop-blur-xl rounded-3xl p-6 sm:p-8 border border-gray-200/80 shadow-lg flex flex-col justify-between group hover:border-pink-400 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-3xl">🌐</span>
+              <span className="text-5xl">🌐</span>
               <span className="text-xs font-bold text-pink-700 bg-pink-50 border border-pink-200 px-2.5 py-1 rounded-lg">
                 Reach
               </span>

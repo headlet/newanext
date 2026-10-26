@@ -59,8 +59,8 @@ export default function Contact() {
                 </div>
                 <div>
                   <h4 className="font-bold text-gray-900 text-sm">Address</h4>
-                  <p className="text-sm text-gray-600">Kathmandu Valley, Nepal</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Shankhamul, Kathmandu</p>
+                  <p className="text-sm text-gray-600">Kathmandu Valley,Bhaktapur Nepal</p>
+                  <p className="text-xs text-gray-400 mt-0.5">suryabinayak, Bhaktapur</p>
                 </div>
               </div>
 
@@ -71,8 +71,8 @@ export default function Contact() {
                 </div>
                 <div>
                   <h4 className="font-bold text-gray-900 text-sm">Phone</h4>
-                  <p className="text-sm text-gray-600">+977-9800000000</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Mon - Fri from 9am to 6pm</p>
+                  <p className="text-sm text-gray-600">+977-9716686870</p>
+                  <p className="text-xs text-gray-400 mt-0.5">sun - Fri from 7am to 9pm</p>
                 </div>
               </div>
 
@@ -83,8 +83,8 @@ export default function Contact() {
                 </div>
                 <div>
                   <h4 className="font-bold text-gray-900 text-sm">Email</h4>
-                  <p className="text-sm text-gray-600">info@newanext.com</p>
-                  <p className="text-sm text-gray-600">hello@newanext.com</p>
+                  <p className="text-sm text-gray-600">newanext1@gmail.com</p>
+                  <p className="text-sm text-gray-600"><a href="https://newanext.bond/">newanext.bond</a></p>
                 </div>
               </div>
 

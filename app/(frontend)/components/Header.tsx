@@ -79,7 +79,7 @@ const COURSE_CATEGORIES = [
       { name: "Python Django course in Nepal", href: "/courses/python-django" },
       {
         name: "Frontend software engineering course",
-        href: "/courses/frontend-engineering",
+        href: "/About",
       },
       {
         name: "Data Structures and Algorithms course in Nepal",

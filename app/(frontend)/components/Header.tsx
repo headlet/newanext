@@ -79,7 +79,7 @@ const COURSE_CATEGORIES = [
       { name: "Python Django course in Nepal", href: "/courses/python-django" },
       {
         name: "software engineering course with AI",
-        href: "/software-engineering -with-ai",
+        href: "/software-engineering-with-ai",
       },
       {
         name: "Data Structures and Algorithms course in Nepal",
@@ -87,7 +87,7 @@ const COURSE_CATEGORIES = [
       },
       { name: "Complete Flutter course in Nepal", href: "/courses/flutter" },
       {
-        name: "WordPress training course in Nepal",
+        name: "Web designing course in Nepal",
         href: "/courses/wordpress",
       },
     ],

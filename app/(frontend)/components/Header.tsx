@@ -74,18 +74,18 @@ const COURSE_CATEGORIES = [
     courses: [
       {
         name: "Full-Stack MERN course in Nepal",
-        href: "/mernstack",
+        href: "/mernstack-course-in-Nepal",
       },
-      { name: "Python Django course in Nepal", href: "/python-Django-course-in-nepal" },
+      { name: "Python Django course in Nepal", href: "/python-Django-course-in-Nepal" },
       {
         name: "software engineering course with AI",
-        href: "/software-engineering-with-ai",
+        href: "/software-engineering-with-ai-in-Nepal",
       },
       {
         name: "Data Structures and Algorithms course in Nepal",
-        href: "/courses/dsa",
+        href: "/data-structure-and-algorithm-in-Nepal",
       },
-      { name: "Complete Flutter course in Nepal", href: "/flutter-course-in-nepal" },
+      { name: "Complete Flutter course in Nepal", href: "/flutter-course-in-Nepal" },
       {
         name: "Web designing course in Nepal",
         href: "/courses/wordpress",

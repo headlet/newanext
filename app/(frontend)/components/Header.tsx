@@ -85,7 +85,7 @@ const COURSE_CATEGORIES = [
         name: "Data Structures and Algorithms course in Nepal",
         href: "/courses/dsa",
       },
-      { name: "Complete Flutter course in Nepal", href: "/courses/flutter" },
+      { name: "Complete Flutter course in Nepal", href: "/flutter-course-in-nepal" },
       {
         name: "Web designing course in Nepal",
         href: "/courses/wordpress",
